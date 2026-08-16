@@ -346,6 +346,45 @@ describe('Web session model selection', () => {
     expect(readImage).toHaveBeenCalledOnce()
     await ctx.fiber.dispose()
   })
+  it('authorizes an attachment named only by an uploaded-image pointer', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const ref = {
+      attachmentId: 'sha256:' + 'a'.repeat(64), mediaType: 'image/png' as const, bytes: 2, width: 412, height: 620, name: 'shot.png',
+    }
+    const readImageById = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(3, 4) }))
+    ctx.provide('attachments', { readImageById } as never)
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    agent.session.append('user/message', {
+      id: 'pointer-message', role: 'user', source: { kind: 'user' },
+      content: [{
+        type: 'text',
+        text: `[uploaded image: shot.png (412x620, image/png); view it with view_image, passing attachment_id="${ref.attachmentId}" verbatim]`,
+      }],
+    } as never, { surfaceOp: 'append' })
+
+    const allowed = await api.sessions.attachment(request({
+      sessionId, attachmentId: ref.attachmentId as never,
+    }))
+    expect(allowed.result).toMatchObject({ ok: true, value: { attachment: { ...ref, bytes: 2 }, data: 'AwQ=' } })
+    expect(readImageById).toHaveBeenCalledOnce()
+
+    // An id that appears in prose without the pointer's quoted form stays unauthorized.
+    agent.session.append('user/message', {
+      id: 'prose', role: 'user', source: { kind: 'user' },
+      content: [{ type: 'text', text: `someone mentioned sha256:${'b'.repeat(64)} in passing` }],
+    } as never, { surfaceOp: 'append' })
+    const denied = await api.sessions.attachment(request({
+      sessionId, attachmentId: ('sha256:' + 'b'.repeat(64)) as never,
+    }))
+    expect(denied.result).toMatchObject({
+      ok: false,
+      error: { details: { reason: 'ATTACHMENT_NOT_REFERENCED' } },
+    })
+    await ctx.fiber.dispose()
+  })
   it('groups successful providers and leaves an unlisted current selection out of the catalog', async () => {
     const { ctx, sessionId } = await harness({
       provider: 'deepseek-official',

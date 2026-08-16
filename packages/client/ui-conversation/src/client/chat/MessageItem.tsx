@@ -18,6 +18,34 @@ import css from './MessageItem.module.css'
 
 type UserImage = Extract<UserMessageNode['content'][number], { type: 'image' }>
 
+/**
+ * The admission bridge's one-line stand-in for an image a text-only route
+ * cannot carry. Display turns it back into the image it names — the logged
+ * model text stays the single truth; this is presentation only.
+ */
+const UPLOADED_IMAGE_POINTER
+  = /^\[uploaded image: (.+) \((\d+)x(\d+), ([^)]+)\); view it with view_image, passing attachment_id="(sha256:[0-9a-f]{64})" verbatim\]$/
+
+/**
+ * Match one text block as an uploaded-image pointer.
+ * @param text - the block's text.
+ * @returns the display reference the gallery can load, or undefined.
+ */
+export function parseUploadedImagePointer(text: string): { attachment: UserImage['attachment'] } | undefined {
+  const match = UPLOADED_IMAGE_POINTER.exec(text.trim())
+  if (match === null) return undefined
+  return {
+    attachment: {
+      attachmentId: match[5] as UserImage['attachment']['attachmentId'],
+      mediaType: match[4] as UserImage['attachment']['mediaType'],
+      bytes: 0,
+      width: Number(match[2]),
+      height: Number(match[3]),
+      name: match[1] as string,
+    },
+  }
+}
+
 function contentParts(content: readonly unknown[]): {
   text: string
   images: { attachment: UserImage['attachment'] }[]
@@ -28,7 +56,12 @@ function contentParts(content: readonly unknown[]): {
   const rest: unknown[] = []
   for (const block of content) {
     const b = block as { type?: string; text?: string; attachment?: unknown }
-    if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text)
+    if (b.type === 'text' && typeof b.text === 'string') {
+      // A pointer block renders as its image, not as text.
+      const pointer = parseUploadedImagePointer(b.text)
+      if (pointer !== undefined) images.push(pointer)
+      else texts.push(b.text)
+    }
     else if (b.type === 'image' && b.attachment !== undefined) {
       images.push({ attachment: (b as UserImage).attachment })
     }
