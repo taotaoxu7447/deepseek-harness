@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
-import { CardForm, numberField, textField } from '../src/client/card-form.ts'
+import { booleanField, CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
 import {
@@ -13,6 +13,8 @@ import {
 } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
+import { VisionCardController, type VisionSettings } from '../src/client/vision-card-controller.ts'
+import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
 
 /** Make the stub behave like a Host that accepts every write. */
 function acceptWrites<T>(host: StubSettingsScope<T>): void {
@@ -543,6 +545,7 @@ describe('WebSearchCardController', () => {
   })
 })
 
+<<<<<<< HEAD
 describe('ConfigurablePluginsTabController', () => {
   function settingsApi(namespaces: string[]) {
     const describe = vi.fn(() => Promise.resolve({
@@ -683,5 +686,159 @@ describe('ConfigurablePluginsTabController', () => {
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot())
       .toEqual({ loaded: true, namespaces: [] })
+=======
+describe('booleanField', () => {
+  it('formats the three stored states and parses every accepted draft', () => {
+    const spec = booleanField('enabled')
+    expect(spec.format(true)).toBe('on')
+    expect(spec.format(false)).toBe('off')
+    expect(spec.format(undefined)).toBe('')
+    expect(spec.parse('on')).toEqual({ kind: 'set', value: true })
+    expect(spec.parse(' TRUE ')).toEqual({ kind: 'set', value: true })
+    expect(spec.parse('off')).toEqual({ kind: 'set', value: false })
+    expect(spec.parse('False')).toEqual({ kind: 'set', value: false })
+    expect(spec.parse('')).toEqual({ kind: 'clear' })
+    expect(spec.parse('maybe')).toBeUndefined()
+  })
+})
+
+describe('VisionCardController', () => {
+  /** Credentials + vision-discovery wire mocks for the chain card. */
+  function wire(configured = false, models: { id: string; name?: string }[] = [{ id: 'found-model' }]) {
+    type Answer = Promise<{
+      rpcId: never
+      result: { ok: true; value: { credentials: Record<string, { configured: boolean; writable: boolean }> } }
+    }>
+    const describe = vi.fn((): Answer => Promise.resolve({
+      rpcId: 'c-1' as never,
+      result: { ok: true as const, value: { credentials: { VISION_QWEN_API_KEY: { configured, writable: true } } } },
+    }))
+    const set = vi.fn(() => Promise.resolve({ rpcId: 'c-2' as never, result: { ok: true as const, value: {} } }))
+    const discoverModels = vi.fn(() => Promise.resolve({
+      rpcId: 'v-1' as never,
+      result: { ok: true as const, value: { models } },
+    }))
+    const discoverFail = vi.fn(() => Promise.resolve({
+      rpcId: 'v-2' as never,
+      result: { ok: false as const, error: { code: 'vision-discovery-failed' as never, message: 'cannot reach the endpoint' } },
+    }))
+    const api = { credentials: { describe, set }, vision: { discoverModels } }
+    return {
+      api: api as unknown as Pick<IApiClient, 'credentials' | 'vision'>,
+      describe,
+      set,
+      discoverModels,
+      discoverFail,
+    }
+  }
+
+  function section(host: StubSettingsScope<VisionSettings>, rows: VisionSettings['backends'], attempts?: number): void {
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { backends: rows, ...attempts === undefined ? {} : { attemptsPerBackend: attempts } } as VisionSettings,
+      base: { backends: rows },
+      user: {},
+    })
+  }
+
+  it('seeds the staged chain from the stored section', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1', model: 'm1' }, { id: 'gpt', baseURL: 'https://gpt.test/v1', model: 'm2', enabled: false }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(2) })
+
+    const state = controller.inject().hooks.visionCard.getSnapshot()
+    expect(state.rows.map(row => row.id)).toEqual(['qwen', 'gpt'])
+    expect(state.rows[1]?.enabled).toBe(false)
+    expect(state.dirty).toBe(false)
+    expect(state.canAdd).toBe(true)
+  })
+
+  it('stages edits, reorders, adds within the cap, and saves the whole chain', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'a', baseURL: 'https://a.test/v1' }, { id: 'b', baseURL: 'https://b.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(2) })
+    const face = controller.inject()
+
+    face.editRow(0, 'model', ' qwen-vl ')
+    face.moveRow(0, 1)
+    face.addRow()
+    face.editAttempts('3')
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('attemptsPerBackend', 3) })
+
+    const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
+    const [field, value] = backendsCall
+    expect(field).toBe('backends')
+    const rows = value as { id: string; model?: string }[]
+    expect(rows.map(row => row.id)).toEqual(['b', 'a', 'backend-3'])
+    expect(rows[1]?.model).toBe('qwen-vl')
+    expect(host.set).toHaveBeenCalledWith('attemptsPerBackend', 3)
+  })
+
+  it('probes an endpoint and stages the advertised model', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.probe(0)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.visionCard.getSnapshot().probes[0]?.models).toEqual([{ id: 'found-model' }])
+    })
+    expect(w.discoverModels).toHaveBeenCalledWith({ baseURL: 'https://qwen.test/v1', apiKeyEnv: 'VISION_QWEN_API_KEY' })
+    // A single advertised model stages itself.
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows[0]?.model).toBe('found-model')
+  })
+
+  it('surfaces a probe failure on the row', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const failingApi = { credentials: w.api.credentials, vision: { discoverModels: w.discoverFail } } as unknown as Pick<IApiClient, 'credentials' | 'vision'>
+    const controller = new VisionCardController(host.scope, failingApi)
+    section(host, [{ id: 'qwen', baseURL: 'https://down.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().probe(0)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.visionCard.getSnapshot().probes[0]?.error).toContain('cannot reach')
+    })
+  })
+
+  it('writes staged keys through the credentials domain, never the section', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRowKey(0, ' typed-secret ')
+    face.save()
+    await vi.waitFor(() => { expect(w.set).toHaveBeenCalled() })
+
+    expect(w.set).toHaveBeenCalledWith({ ref: 'VISION_QWEN_API_KEY', value: 'typed-secret' })
+    expect(host.set).not.toHaveBeenCalledWith(expect.stringContaining('apiKey'), expect.anything())
+  })
+
+  it('caps the staged chain at five rows', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [1, 2, 3, 4, 5].map(n => ({ id: `b${n}`, baseURL: `https://b${n}.test/v1` })))
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(5) })
+    const state = controller.inject().hooks.visionCard.getSnapshot()
+
+    expect(state.canAdd).toBe(false)
+    controller.inject().addRow()
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(5)
+>>>>>>> 0f661de00d (feat(vision): single Vision settings card — priority-ordered backend chain editor)
   })
 })

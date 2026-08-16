@@ -146,6 +146,28 @@ export function textField(field: string): CardFieldSpec {
 }
 
 /**
+ * A boolean field staged through the shared text-draft model: `on`/`off` are
+ * the draft a toggle control writes, an empty draft clears the field so it
+ * re-inherits the composition layer, and anything else blocks the save. The
+ * toggle itself interprets the draft; the framework stays text-shaped.
+ * @param field - field name inside the namespace section.
+ * @returns the field's conversion spec.
+ */
+export function booleanField(field: string): CardFieldSpec {
+  return {
+    field,
+    format: value => value === true ? 'on' : value === false ? 'off' : '',
+    parse: (text) => {
+      const trimmed = text.trim().toLowerCase()
+      if (trimmed === '') return { kind: 'clear' }
+      if (trimmed === 'on' || trimmed === 'true') return { kind: 'set', value: true }
+      if (trimmed === 'off' || trimmed === 'false') return { kind: 'set', value: false }
+      return undefined
+    },
+  }
+}
+
+/**
  * Stages one card's edits over one settings namespace and writes them on save.
  *
  * The form publishes through a snapshot store because slot components read
