@@ -278,6 +278,10 @@ export class FakeApiClient implements IApiClient {
     discoverModels: payload => this.record('llm.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
   }
 
+  readonly vision: IApiClient['vision'] = {
+    discoverModels: payload => this.record('vision.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
+  }
+
   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
   suppressStreamOpen = false
 

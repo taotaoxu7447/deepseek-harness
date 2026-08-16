@@ -351,6 +351,10 @@ describe('argument and service preconditions', () => {
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
+
+      readImageById(): Promise<StoredImageAttachment> {
+        throw new Error('unreachable in this test')
+      }
     }
     const ctx = await setup({ attachments: false })
     await ctx.plugin(JpegOnlyStore)
@@ -480,6 +484,10 @@ describe('image admission failures', () => {
       }
 
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+        throw new Error('unreachable in this test')
+      }
+
+      readImageById(): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
     }

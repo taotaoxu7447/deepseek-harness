@@ -505,6 +505,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Search and fetch providers register into one ctx.web seam; tool-web owns the stable model-facing names.',
   },
   {
+    key: 'vision',
+    pkg: 'vision',
+    title: 'Vision provider registry',
+    mode: 'seam',
+    implementations: ['vision-qwen'],
+    consumers: ['tool-vision'],
+    note: 'Vision providers register into one ctx.vision seam; tool-vision owns the text-only view_image tool that works on routes read_image cannot serve.',
+  },
+  {
     key: 'spillStore',
     pkg: 'spill',
     title: 'Spill storage seam',

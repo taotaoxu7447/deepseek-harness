@@ -2875,6 +2875,24 @@ export interface Config {
 
 Source: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
 
+<a id="deepseek-aidsh-tool-vision"></a>
+
+## `@deepseek-ai/dsh-tool-vision`
+
+Requires: `tools` · `vision` · `fs` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config: the tool-call budget and the rendered output cap. */
+export interface Config {
+  /** Cooperative timeout budget (ms) for `view_image`. Defaults to 120000. */
+  timeoutMs?: number
+  /** Cap on complete rendered `view_image` output characters. Defaults to 8192. */
+  maxOutputChars?: number
+}
+```
+
+Source: [`packages/vision/tool-vision/src/index.ts:34`](../packages/vision/tool-vision/src/index.ts)
+
 <a id="deepseek-aidsh-tool-web"></a>
 
 ## `@deepseek-ai/dsh-tool-web`
@@ -3003,6 +3021,67 @@ export type ApprovalPolicy = 'ask' | 'never'
 ```
 
 Source: [`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
+
+<a id="deepseek-aidsh-vision"></a>
+
+## `@deepseek-ai/dsh-vision`
+
+```ts config-catalog
+/**
+ * Config for the vision seam. `provider` pins which registered provider serves
+ * `describe`; omitted auto-selects when exactly one usable provider is
+ * registered. Operational overrides must feed this same field rather than
+ * introduce a hidden priority chain.
+ */
+export interface VisionRuntimeConfig {
+  /** Explicit vision provider id. Omitted = auto-select when exactly one usable. */
+  readonly provider?: string
+}
+```
+
+Source: [`packages/vision/vision/src/index.ts:36`](../packages/vision/vision/src/index.ts)
+
+<a id="deepseek-aidsh-vision-qwen"></a>
+
+## `@deepseek-ai/dsh-vision-qwen`
+
+Requires: `vision`
+
+```ts config-catalog
+/** Plugin config (all optional — `apply` fills env-var and constant defaults, or the settings section overrides). */
+export interface Config {
+  /** Backends in priority order (index 0 served first). At most {@link VISION_MAX_BACKENDS}. */
+  backends?: BackendConfig[]
+  /** Attempts each backend gets before the chain falls to the next priority. Defaults to 2. */
+  attemptsPerBackend?: number
+  /** Sampling temperature, within `[0, 2]`. Defaults to 0.2. */
+  temperature?: number
+  /** Completion budget (tokens) for one description. Defaults to 1024. */
+  maxTokens?: number
+  /** HTTP budget (ms) for one describe attempt. Defaults to 60000. */
+  timeoutMs?: number
+}
+
+/** One vision backend in the priority chain. */
+export interface BackendConfig {
+  /** Stable id naming this backend in errors and credential references. */
+  id: string
+  /** Endpoint base; `/chat/completions` is appended. Falls back to `$QWEN_BASE_URL`. */
+  baseURL?: string
+  /** Vision model id the endpoint serves. */
+  model?: string
+  /** Credential reference resolved for each describe; defaults to `VISION_<ID>_API_KEY`. */
+  apiKeyEnv?: string
+  /** Literal API key; prefer {@link BackendConfig.apiKeyEnv} so no secret enters configuration files. */
+  apiKey?: string
+  /** False parks this backend without reordering the rest. Defaults to true. */
+  enabled?: boolean
+  /** System instruction for this backend's describe calls. Defaults to the built-in sidecar instruction. */
+  instruction?: string
+}
+```
+
+Source: [`packages/vision/vision-qwen/src/index.ts:81`](../packages/vision/vision-qwen/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 

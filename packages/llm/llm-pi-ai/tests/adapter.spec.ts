@@ -232,6 +232,10 @@ describe('PiAiAdapter provider routing', () => {
       readImage(value: ImageAttachmentRef): Promise<StoredImageAttachment> {
         return readImage(value)
       }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
+      }
     }
 
     const ctx = new Context()

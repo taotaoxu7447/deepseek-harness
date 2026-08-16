@@ -43,6 +43,7 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+| `@deepseek-ai/dsh-tool-vision` | `view_image` | `ctx.tools`、`ctx.vision`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (registration)`、`a usable vision provider at call time` | `tool/call`、`fs/observed after resolve/stat and successful validation`、`tool/result` | - | view_image 只返回文本，因此在 read_image 拒绝的纯文本路由上依然可用；`@deepseek-ai/dsh-vision-qwen` 为 ctx.vision 提供 Qwen 后端的提供方。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2223,3 +2224,35 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
+
+<a id="deepseek-aidsh-tool-vision"></a>
+
+## `@deepseek-ai/dsh-tool-vision`
+
+### `view_image`
+
+View a PNG/JPEG/WebP/GIF image with a vision model and return a detailed text description of its visual content, including text in the image. Takes either a file path or the attachment_id of an uploaded image. Works even when the current model cannot accept image input.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file_path": {
+      "type": "string",
+      "description": "Path to the image file, resolved by the filesystem backend. Exactly one of file_path or attachment_id."
+    },
+    "attachment_id": {
+      "type": "string",
+      "description": "Id of an uploaded image, copied verbatim from the uploaded-image pointer in the conversation. Exactly one of file_path or attachment_id."
+    },
+    "question": {
+      "type": "string",
+      "description": "Optional question about the image; the description focuses on answering it."
+    }
+  }
+}
+```
+
+来源：[`packages/vision/tool-vision/src/index.ts`](../packages/vision/tool-vision/src/index.ts)
+
+view_image 只返回文本，因此在 read_image 拒绝的纯文本路由上依然可用；`@deepseek-ai/dsh-vision-qwen` 为 ctx.vision 提供 Qwen 后端的提供方。
