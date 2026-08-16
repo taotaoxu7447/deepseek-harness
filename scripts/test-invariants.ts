@@ -131,6 +131,10 @@ class TestAttachmentStore extends AttachmentStore {
   readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
     return Promise.reject(new Error('test invariant attachment store does not read images'))
   }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused in this test'))
+  }
 }
 
 /**

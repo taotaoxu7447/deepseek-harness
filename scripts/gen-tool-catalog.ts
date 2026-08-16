@@ -60,6 +60,8 @@ import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
+import VisionRuntime from '@deepseek-ai/dsh-vision'
+import * as ToolVision from '@deepseek-ai/dsh-tool-vision'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
@@ -84,6 +86,10 @@ class CatalogAttachmentStore extends AttachmentStore {
   }
 
   override readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+    return Promise.reject(new Error('gen-tool-catalog: attachment reads are unreachable during schema harvest'))
+  }
+
+  override readImageById(): Promise<StoredImageAttachment> {
     return Promise.reject(new Error('gen-tool-catalog: attachment reads are unreachable during schema harvest'))
   }
 }
@@ -550,6 +556,25 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-vision',
+    dir: 'tool-vision',
+    source: 'packages/vision/tool-vision/src/index.ts',
+    requires: ['ctx.tools', 'ctx.vision', 'ctx.fs', 'ctx.systemPrompt', 'ctx.attachments (registration)', 'a usable vision provider at call time'],
+    writes: ['tool/call', 'fs/observed after resolve/stat and successful validation', 'tool/result'],
+    async mount(ctx) {
+      // The seam with no provider registered: the schema is provider-independent
+      // and only execution requires a usable provider. The catalog attachment
+      // marker opts into the attachments-conditional registration without
+      // attachment I/O, mirroring the tool-fs recipe.
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(CatalogAttachmentStore)
+      await ctx.plugin(VisionRuntime)
+      await ctx.plugin(ToolVision)
+    },
+    note:
+      'view_image returns text only, so it works on text-only routes where read_image refuses; `@deepseek-ai/dsh-vision-qwen` supplies the Qwen-backed provider for ctx.vision.',
   },
 ]
 

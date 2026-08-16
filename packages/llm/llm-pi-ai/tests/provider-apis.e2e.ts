@@ -87,6 +87,10 @@ async function harness(image?: StoredImageAttachment): Promise<Context> {
         }
         return Promise.resolve(fixture)
       }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
+      }
     }
     await ctx.plugin(E2eAttachmentStore)
   }

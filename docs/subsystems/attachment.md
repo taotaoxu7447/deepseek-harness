@@ -109,7 +109,21 @@ abstract saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>
  * @throws the signal reason when aborted, or a storage error when verification fails.
  */
 abstract readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment>
+
+/**
+ * Read one durably stored image by its id alone, rebuilding the canonical
+ * reference from the stored bytes. The admission bridge logs images as
+ * pointers that name only the id, so a consumer that never saw the original
+ * block (a model-driven `view_image` call, for example) can still fetch the
+ * verified bytes.
+ * @param attachmentId - the id `saveImage` returned.
+ * @param signal - optional cancellation for backend read and verification work.
+ * @returns the verified bytes and the rebuilt canonical reference.
+ * @throws the signal reason when aborted, or a storage error when the id is
+ *   unknown or its bytes fail verification.
+ */
+abstract readImageById(attachmentId: AttachmentId, signal?: AbortSignal): Promise<StoredImageAttachment>
 ```
 
-Source: [`packages/attachment/attachment/src/index.ts:29`](../../packages/attachment/attachment/src/index.ts)
+Source: [`packages/attachment/attachment/src/index.ts:30`](../../packages/attachment/attachment/src/index.ts)
 <!-- END GENERATED cordis-surface -->
