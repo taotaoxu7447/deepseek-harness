@@ -326,6 +326,46 @@ function referencedImage(events: readonly SessionEvent[], attachmentId: string):
   return undefined
 }
 
+<<<<<<< HEAD
+=======
+/**
+ * Whether any logged text block names this id as an uploaded-image pointer —
+ * the admission bridge's one-line stand-in for a text-only route's image. The
+ * scan matches the exact quoted form the bridge emits, so an id that merely
+ * appears in prose does not authorize its bytes.
+ * @param events - the session's event stream.
+ * @param attachmentId - the id a browser asked to read.
+ * @returns true when a pointer names the id verbatim.
+ */
+function pointerReferencesImage(events: readonly SessionEvent[], attachmentId: string): boolean {
+  const needle = `attachment_id="${attachmentId}"`
+  for (const event of events) {
+    const data = event.data as { content?: unknown; message?: { content?: unknown }; inserted?: Array<{ content?: unknown }> }
+    const candidateBlocks: (readonly unknown[])[] = [
+      ...(Array.isArray(data.content) ? [data.content as readonly unknown[]] : []),
+      ...(Array.isArray(data.message?.content) ? [data.message.content as readonly unknown[]] : []),
+      ...(data.inserted ?? []).map(message => (Array.isArray(message.content) ? message.content as readonly unknown[] : [])),
+    ]
+    for (const blocks of candidateBlocks) {
+      for (const block of blocks as readonly { type?: unknown; text?: unknown }[]) {
+        if (block.type === 'text' && typeof block.text === 'string' && block.text.includes(needle)) return true
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Product settings intentionally exposed beside model-provider namespaces.
+ *
+ * The agent-preset namespace carries one field — which preset a session with
+ * no explicit choice is composed from — and both browser surfaces that offer
+ * that choice write it through `settings.update`, so it has to cross the
+ * configuration boundary or the pickers silently fail to persist.
+ */
+const PRODUCT_SETTINGS_NAMESPACES = new Set(['ui-onboarding', AGENT_PRESET_SETTINGS_NAMESPACE])
+
+>>>>>>> d04be8a2eb (feat(vision): render pasted images in the transcript + native macOS app)
 /** Strict browser-zone profile: UTC or an IANA Area/Location-style identifier. */
 const IANA_TIME_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
 
