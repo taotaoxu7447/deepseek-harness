@@ -15,6 +15,7 @@ import type { GoalsApi } from './goals.ts'
 import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
+import type { VisionApi } from './vision.ts'
 import type { DownloadsApi } from './downloads.ts'
 import type { ClientResponse, RpcReceipt } from './rpc.ts'
 
@@ -31,6 +32,7 @@ export interface ApiProxy {
   settings: SettingsApi
   credentials: CredentialsApi
   llm: LlmApi
+  vision: VisionApi
   /** Host-only download surfaces (GET, no wire envelope); absent from IApiClient. */
   downloads: DownloadsApi
   /**
