@@ -26,10 +26,12 @@ import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
+import { VisionCard } from './VisionCard.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
 import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
+import { VISION_NS, VisionCardController } from './vision-card-controller.ts'
 import { en, zh } from './locales.ts'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
@@ -44,6 +46,7 @@ export type {
 export type { AgentLoopCardFace, AgentLoopCardState } from './agent-loop-card-controller.ts'
 export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
+export type { VisionCardFace, VisionCardState } from './vision-card-controller.ts'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
@@ -63,6 +66,7 @@ export function apply(ctx: ClientContext): void {
   const bash = new BashCardController(ctx.settingsScope.bind({ namespace: SHELL_NS }))
   const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }))
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
+  const vision = new VisionCardController(ctx.settingsScope.bind({ namespace: VISION_NS }), api)
 
   // The credential a card reports is not part of any settings section, so its
   // scope publishes nothing when one is written. This is the only signal that
@@ -171,5 +175,11 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => webSearch.inject(),
     }, WebSearchCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: VISION_NS,
+      locale: NS,
+      inject: () => vision.inject(),
+    }, VisionCard)
   })
 }

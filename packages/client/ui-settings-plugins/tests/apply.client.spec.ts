@@ -125,7 +125,7 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
-      .toEqual(['shell', 'agent-loop', 'web-search-deepseek'])
+      .toEqual(['shell', 'agent-loop', 'web-search-deepseek', 'vision'])
   })
 
   it('dispatches the served namespaces its cards claim, and no others', async () => {
@@ -139,7 +139,7 @@ describe('ui-settings-plugins apply', () => {
     const face = (tab.inject as unknown as () => ConfigurablePluginsTabFace)()
     await vi.waitFor(() => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
-        .toEqual(['agent-loop', 'web-search-deepseek'])
+        .toEqual(['agent-loop', 'web-search-deepseek', 'vision'])
     })
   })
 
