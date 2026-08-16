@@ -88,6 +88,50 @@ export function ValueField(props: FieldProps & {
 }
 
 /**
+ * A staged boolean control. The checkbox interprets the shared text draft:
+ * `on` checks, `off` unchecks, and an inherited (unset) draft reads as the
+ * schema default, which the caller states through `checked`.
+ * @param props - the field's copy, its staged state, and the edit actions.
+ * @returns the labelled toggle.
+ */
+export function ToggleField(props: Pick<FieldProps, 'id' | 'label' | 'hint' | 'overridden' | 'overriddenLabel' | 'resetLabel' | 'disabled' | 'onEdit' | 'onReset'> & {
+  /** Whether the control renders checked for the current draft. */
+  checked: boolean
+}) {
+  return (
+    <div className={css.field}>
+      <div className={css.head}>
+        <label className={css.label} htmlFor={props.id}>{props.label}</label>
+        {props.overridden
+          ? (
+            <span className={css.badges}>
+              <span className={css.badge}>{props.overriddenLabel}</span>
+              <button
+                type="button"
+                className={css.reset}
+                disabled={props.disabled}
+                onClick={props.onReset}
+              >
+                {props.resetLabel}
+              </button>
+            </span>
+          )
+          : null}
+      </div>
+      <input
+        id={props.id}
+        className={css.checkbox}
+        type="checkbox"
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={(event) => { props.onEdit(event.target.checked ? 'on' : 'off') }}
+      />
+      <p className={css.hint}>{props.hint}</p>
+    </div>
+  )
+}
+
+/**
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank
  * draft writes nothing, which keeps the stored key rather than clearing it.

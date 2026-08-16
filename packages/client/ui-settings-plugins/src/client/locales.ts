@@ -11,6 +11,13 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'visionTitle' | 'visionDescription' | 'visionPriority'
+  | 'visionMoveUp' | 'visionMoveDown' | 'visionRemove' | 'visionAddBackend'
+  | 'visionEnabled' | 'visionEnabledHint'
+  | 'visionApiKey' | 'visionApiKeyHint' | 'visionApiKeySet' | 'visionApiKeyUnset'
+  | 'visionModel' | 'visionModelHint' | 'visionBaseUrl' | 'visionBaseUrlHint'
+  | 'visionProbe' | 'visionProbing' | 'visionPickModel'
+  | 'visionAttempts' | 'visionAttemptsHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -51,6 +58,28 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: 'Leave blank to use the provider default.',
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  visionTitle: 'Vision',
+  visionDescription: 'The vision models behind the view_image tool and pasted-image recognition. Priority 1 serves first; a backend failing its attempt budget falls to the next.',
+  visionPriority: 'Priority {n}',
+  visionMoveUp: 'Up',
+  visionMoveDown: 'Down',
+  visionRemove: 'Remove',
+  visionAddBackend: 'Add backend',
+  visionEnabled: 'Enable this backend',
+  visionEnabledHint: 'Off parks this backend without reordering the chain.',
+  visionApiKey: 'API key',
+  visionApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key; a keyless local endpoint needs none.',
+  visionApiKeySet: 'A key is configured.',
+  visionApiKeyUnset: 'No key is configured; a keyless local endpoint works without one.',
+  visionModel: 'Model',
+  visionModelHint: 'Use the probe button to fill this from the endpoint, or type the id.',
+  visionBaseUrl: 'Endpoint',
+  visionBaseUrlHint: 'OpenAI-compatible base URL; /chat/completions is appended.',
+  visionProbe: 'Test & list models',
+  visionProbing: 'Probing the endpoint…',
+  visionPickModel: 'Pick a model…',
+  visionAttempts: 'Attempts per backend',
+  visionAttemptsHint: 'Tries before falling to the next priority.',
 }
 
 /** Simplified Chinese copy. */
@@ -92,4 +121,26 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: '留空则使用提供方默认地址。',
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  visionTitle: '视觉',
+  visionDescription: 'view_image 工具与粘贴识图背后的视觉模型。优先级 1 先服务；一个后端耗尽尝试次数后自动降级到下一个。',
+  visionPriority: '优先级 {n}',
+  visionMoveUp: '上移',
+  visionMoveDown: '下移',
+  visionRemove: '移除',
+  visionAddBackend: '添加后端',
+  visionEnabled: '启用此后端',
+  visionEnabledHint: '关闭只是停用，不改变链内顺序。',
+  visionApiKey: 'API Key',
+  visionApiKeyHint: '不写入设置文件。留空表示保持当前密钥；无鉴权的本地端点可不填。',
+  visionApiKeySet: '已配置密钥。',
+  visionApiKeyUnset: '未配置密钥；无鉴权的本地端点可以不配置。',
+  visionModel: '模型',
+  visionModelHint: '点「测试并获取模型」自动填入，或手动输入 id。',
+  visionBaseUrl: '接口地址',
+  visionBaseUrlHint: 'OpenAI 兼容的基础 URL；自动追加 /chat/completions。',
+  visionProbe: '测试并获取模型',
+  visionProbing: '正在探测端点…',
+  visionPickModel: '选择模型…',
+  visionAttempts: '每个后端尝试次数',
+  visionAttemptsHint: '耗尽此次数后降级到下一优先级。',
 }
