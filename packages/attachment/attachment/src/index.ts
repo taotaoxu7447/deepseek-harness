@@ -1,6 +1,7 @@
 /** Durable attachment storage seam (`ctx.attachments`). @module @deepseek-ai/dsh-attachment */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { AttachmentId } from './brand.ts'
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
@@ -57,6 +58,20 @@ export abstract class AttachmentStore extends Service {
    * @throws the signal reason when aborted, or a storage error when verification fails.
    */
   abstract readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment>
+
+  /**
+   * Read one durably stored image by its id alone, rebuilding the canonical
+   * reference from the stored bytes. The admission bridge logs images as
+   * pointers that name only the id, so a consumer that never saw the original
+   * block (a model-driven `view_image` call, for example) can still fetch the
+   * verified bytes.
+   * @param attachmentId - the id `saveImage` returned.
+   * @param signal - optional cancellation for backend read and verification work.
+   * @returns the verified bytes and the rebuilt canonical reference.
+   * @throws the signal reason when aborted, or a storage error when the id is
+   *   unknown or its bytes fail verification.
+   */
+  abstract readImageById(attachmentId: AttachmentId, signal?: AbortSignal): Promise<StoredImageAttachment>
 }
 
 export default AttachmentStore

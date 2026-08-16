@@ -86,6 +86,13 @@ export interface RpcErrorDetailsMap {
    * details name the endpoint asked, never the credential offered.
    */
   'model-discovery-failed': { settingsNs: string; baseURL?: string }
+  /**
+   * Probing a draft vision endpoint did not produce a model listing: the
+   * endpoint was unreachable, refused the credential, or answered with a shape
+   * this build cannot read. The message names the cause; the details name the
+   * endpoint asked, never the credential offered.
+   */
+  'vision-discovery-failed': { baseURL: string }
   'title-invalid': { sessionId: SessionId }
   'fork-unavailable': { sessionId: SessionId }
   'subagent-parent-unavailable': { parentSessionId: SessionId }

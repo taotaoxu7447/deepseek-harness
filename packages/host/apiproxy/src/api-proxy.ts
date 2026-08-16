@@ -89,6 +89,10 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // Side-effect type import: resolves the `approval/request` waterfall and
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
+// Type-only: resolves `ctx.get('vision')` — the optional vision sidecar whose
+// presence decides whether pasted images may enter a text-only session as
+// view_image pointers (the admission bridge in `prompt`).
+import type {} from '@deepseek-ai/dsh-vision'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
@@ -125,6 +129,7 @@ const DEFAULT_MAX_MESSAGES = 50
  */
 const WEB_SETTINGS_NAMESPACES = [
   'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'web-search-deepseek',
+  'vision',
 ] as const
 
 /** Provider work budget: at most 100 calls and 2,000 inspected hits. */
@@ -145,6 +150,82 @@ function decodeBase64(data: string): Uint8Array {
     throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
   }
   return new Uint8Array(decoded)
+}
+
+/**
+ * Probe one OpenAI-compatible endpoint's model listing. Both common shapes
+ * answer: the OpenAI `{data: [{id, name?}]}` array and llama.cpp's
+ * `{models: [{model | name}]}` object array.
+ *
+ * @param baseURL - endpoint base; `/models` is appended.
+ * @param bearer - resolved API key; undefined sends no Authorization header.
+ * @param signal - cancellation from the probing request.
+ * @returns the advertised model views.
+ * @throws Error naming the failure: transport, HTTP status, or unusable body.
+ */
+async function fetchVisionModels(
+  baseURL: string,
+  bearer: string | undefined,
+  signal: AbortSignal | undefined,
+): Promise<{ id: string; name?: string }[]> {
+  let response: Response
+  try {
+    response = await fetch(`${baseURL.replace(/\/+$/, '')}/models`, {
+      method: 'GET',
+      redirect: 'error',
+      headers: {
+        ...bearer !== undefined && bearer.length > 0 ? { authorization: `Bearer ${bearer}` } : {},
+        accept: 'application/json',
+      },
+      signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(10_000)]),
+    })
+  } catch (error: unknown) {
+    const code = (error as { cause?: { code?: unknown } } | null | undefined)?.cause?.code
+    throw new Error(`cannot reach ${baseURL}: ${typeof code === 'string' ? code : String(error)}`)
+  }
+  if (!response.ok) {
+    throw new Error(`endpoint answered HTTP ${response.status}`)
+  }
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch (error: unknown) {
+    throw new Error(`endpoint body is not JSON: ${String(error)}`)
+  }
+  const list = payload as { data?: unknown; models?: unknown }
+  const entries = Array.isArray(list.data)
+    ? list.data as readonly Record<string, unknown>[]
+    : Array.isArray(list.models)
+      ? list.models as readonly Record<string, unknown>[]
+      : undefined
+  if (entries === undefined) throw new Error('endpoint lists no models in a known shape')
+  const models: { id: string; name?: string }[] = []
+  for (const entry of entries) {
+    const fromId = typeof entry.id === 'string' ? entry.id : undefined
+    const id = fromId ?? (typeof entry.model === 'string' ? entry.model : undefined)
+    if (id === undefined || id.length === 0) continue
+    models.push({ id, ...typeof entry.name === 'string' ? { name: entry.name } : {} })
+  }
+  if (models.length === 0) throw new Error('endpoint advertises no models')
+  return models
+}
+
+/**
+ * Replace one admitted image block with the pointer a text-only route can
+ * carry: the image is already durably stored, so the pointer names its
+ * attachment id and the `view_image` argument that fetches it. The model
+ * decides when (and with which focus question) to look, through the same
+ * priority chain as every other view.
+ * @param block - the validated, durably stored image block.
+ * @returns the pointer text block.
+ */
+function visionPointerBlock(block: Extract<ContentBlock, { type: 'image' }>): ContentBlock {
+  const ref = block.attachment
+  const label = ref.name ?? 'image'
+  return {
+    type: 'text',
+    text: `[uploaded image: ${label} (${ref.width}x${ref.height}, ${ref.mediaType}); view it with view_image, passing attachment_id="${String(ref.attachmentId)}" verbatim]`,
+  }
 }
 
 /** Validate one prompt as a batch before publishing any durable image object. */
@@ -2482,19 +2563,34 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const hasImage = content.some(part => part.type === 'image')
         const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
           try {
+            let bridged = false
             if (hasImage) {
               const current = selectionFor(agent).current
               const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
               if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('image')) {
-                return err(request, {
-                  code: 'attachment-error',
-                  message: `Model "${current.model}" does not support image input.`,
-                  details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
-                })
+                // A text-only route: an image block in the log would poison
+                // every later request, so it may only enter as a pointer the
+                // model resolves through view_image. Without a usable vision
+                // chain the pointer would name a tool that cannot run, so the
+                // image is refused up front instead.
+                const vision = ctx.get('vision')
+                if (vision === undefined || !vision.hasUsableProvider()) {
+                  return err(request, {
+                    code: 'attachment-error',
+                    message: `Model "${current.model}" does not support image input.`,
+                    details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                  })
+                }
+                bridged = true
               }
             }
             const durable = await durablePromptContent(ctx, content)
-            const message: UserMessage = createUserMessage({ content: durable, source })
+            const message: UserMessage = createUserMessage({
+              content: bridged
+                ? durable.map(block => block.type === 'image' ? visionPointerBlock(block) : block)
+                : durable,
+              source,
+            })
             if (mode === 'steer') agent.steer(message)
             else agent.followup(message)
           } catch (error: unknown) {
@@ -3421,6 +3517,36 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             code: 'model-discovery-failed',
             message: error instanceof Error ? error.message : String(error),
             details: { settingsNs, ...baseURL === undefined ? {} : { baseURL } },
+          })
+        }
+      },
+    },
+
+    vision: {
+      async discoverModels(request, signal) {
+        const { baseURL, apiKey, apiKeyEnv } = request.payload
+        if (!URL.canParse(baseURL)) {
+          return err(request, {
+            code: 'vision-discovery-failed',
+            message: 'baseURL must be an absolute URL.',
+            details: { baseURL },
+          })
+        }
+        let bearer = apiKey
+        if (bearer === undefined && apiKeyEnv !== undefined && apiKeyEnv.length > 0) {
+          bearer = (await ctx.get('credentials')?.resolve(credentialRef(apiKeyEnv)))?.value
+        }
+        try {
+          const models = await fetchVisionModels(baseURL, bearer, signal)
+          return ok(request, { models })
+        } catch (error: unknown) {
+          // Every failure here is the user's next move, not a transport fault:
+          // a wrong endpoint, a refused key, or a listing shape we cannot read.
+          // The message names the cause; it never repeats credential material.
+          return err(request, {
+            code: 'vision-discovery-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { baseURL },
           })
         }
       },
