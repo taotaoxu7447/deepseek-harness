@@ -28,6 +28,7 @@ function scriptedApi(overrides: {
   settings?: Partial<ApiProxy['settings']>
   credentials?: Partial<ApiProxy['credentials']>
   llm?: Partial<ApiProxy['llm']>
+  vision?: Partial<ApiProxy['vision']>
   respond?: ApiProxy['respond']
 } = {}): ApiProxy {
   async function *empty<F>(): AsyncGenerator<RpcRequest<F>> { /* no frames */ }
@@ -127,6 +128,10 @@ function scriptedApi(overrides: {
       models: r => ok(r, { groups: [], failures: [] }),
       discoverModels: err,
       ...overrides.llm,
+    },
+    vision: {
+      discoverModels: err,
+      ...overrides.vision,
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),

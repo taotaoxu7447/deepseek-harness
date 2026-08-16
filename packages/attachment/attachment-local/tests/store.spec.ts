@@ -7,7 +7,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
 import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
-import { readImageFile, saveImageFile } from '../src/store.ts'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { readImageByIdFile, readImageFile, saveImageFile } from '../src/store.ts'
 
 const fsControl = vi.hoisted(() => ({
   readSignals: [] as AbortSignal[],
@@ -233,5 +234,39 @@ describe('local attachment store', () => {
 
     await expect(saveImageFile(storageRoot, { data: PNG, mediaType: 'image/png' }, LIMITS))
       .rejects.toMatchObject({ code: 'ATTACHMENT_WRITE_FAILED' })
+  })
+})
+
+describe('readImageByIdFile', () => {
+  afterEach(async () => {
+    for (const created of roots.splice(0)) await rm(created, { recursive: true, force: true })
+  })
+
+  it('rebuilds the canonical reference from stored bytes alone', async () => {
+    const storageRoot = await root()
+    const ref = await saveImageFile(storageRoot, { data: PNG, mediaType: 'image/png', name: 'dot.png' }, LIMITS)
+    const stored = await readImageByIdFile(storageRoot, ref.attachmentId)
+
+    expect([...stored.data]).toEqual([...PNG])
+    expect(stored.ref.mediaType).toBe('image/png')
+    expect(stored.ref.bytes).toBe(PNG.byteLength)
+    expect(stored.ref.width).toBe(1)
+    expect(stored.ref.height).toBe(1)
+    expect(stored.ref.name).toBeUndefined()
+  })
+
+  it('refuses an unknown id with ATTACHMENT_NOT_FOUND', async () => {
+    const storageRoot = await root()
+    await expect(readImageByIdFile(storageRoot, AttachmentId('sha256:' + '0'.repeat(64))))
+      .rejects.toMatchObject({ code: 'ATTACHMENT_NOT_FOUND' })
+  })
+
+  it('refuses tampered bytes with ATTACHMENT_CORRUPT', async () => {
+    const storageRoot = await root()
+    const ref = await saveImageFile(storageRoot, { data: PNG, mediaType: 'image/png' }, LIMITS)
+    const digestHex = String(ref.attachmentId).slice('sha256:'.length)
+    await writeFile(join(storageRoot, 'objects', digestHex.slice(0, 2), digestHex), Buffer.from('tampered bytes'))
+    await expect(readImageByIdFile(storageRoot, ref.attachmentId))
+      .rejects.toMatchObject({ code: 'ATTACHMENT_CORRUPT' })
   })
 })

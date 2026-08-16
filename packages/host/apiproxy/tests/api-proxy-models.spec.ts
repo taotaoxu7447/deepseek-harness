@@ -20,6 +20,7 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
+import VisionRuntime from '@deepseek-ai/dsh-vision'
 import type { RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '../src/api-proxy.ts'
@@ -127,6 +128,37 @@ function registerTextOnly(ctx: Context): void {
       return Promise.resolve({ provider, id: model, name: model, inputModalities: ['text'] })
     }
   }('Text Only', []))
+}
+
+/** The attachment-store face the vision-bridge tests need: validate, save, verified read. */
+function stubAttachments(ctx: Context): { saved: { data: Uint8Array; name?: string }[] } {
+  const saved: { data: Uint8Array; name?: string }[] = []
+  ctx.provide('attachments', {
+    imageLimits: {
+      maxImageBytes: 4,
+      maxImagesPerMessage: 4,
+      maxMessageImageBytes: 8,
+      maxImagePixels: 4,
+      mediaTypes: ['image/png'],
+    },
+    validateImage: (_input: { data: Uint8Array }) => Promise.resolve(),
+    saveImage: (input: { data: Uint8Array; mediaType: 'image/png'; name?: string }) => {
+      saved.push({ data: input.data, ...input.name === undefined ? {} : { name: input.name } })
+      return Promise.resolve({
+        attachmentId: `att-${saved.length}`,
+        mediaType: input.mediaType,
+        bytes: input.data.byteLength,
+        width: 1,
+        height: 1,
+        ...input.name === undefined ? {} : { name: input.name },
+      })
+    },
+    readImage: (ref: { attachmentId: string }) => {
+      const index = Number(ref.attachmentId.slice('att-'.length)) - 1
+      return Promise.resolve({ ref, data: saved[index]?.data ?? new Uint8Array() })
+    },
+  } as never)
+  return { saved }
 }
 
 describe('Web session model selection', () => {
@@ -239,6 +271,44 @@ describe('Web session model selection', () => {
     expect(expectValue(await api.sessions.selectModel(request({
       sessionId, provider: 'text-only', model: 'plain',
     }))).selected).toEqual({ provider: 'text-only', model: 'plain' })
+    await ctx.fiber.dispose()
+  })
+
+  it('admits pasted images as view_image pointers on a text-only route', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    registerTextOnly(ctx)
+    const { saved } = stubAttachments(ctx)
+    await ctx.plugin(VisionRuntime)
+    ctx.vision.registerProvider({
+      id: 'sidecar',
+      available: () => true,
+      describe: () => Promise.resolve({ text: 'must not be called at admission', model: 'sidecar-model' }),
+    })
+    const followup = vi.fn()
+    Object.assign(agent, { followup })
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'text-only', model: 'plain' }),
+      cwd: '/tmp',
+    })
+
+    const result = await api.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: [
+        { type: 'image' as const, mediaType: 'image/png' as const, data: 'AQ==', name: 'first.png' },
+        { type: 'text' as const, text: 'compare' },
+      ],
+    }))
+
+    expect(result.result.ok).toBe(true)
+    expect(saved).toHaveLength(1)
+    const content = (followup.mock.calls[0]?.[0] as UserMessage).content
+    expect(content).toHaveLength(2)
+    expect(content[0]).toEqual({
+      type: 'text',
+      text: '[uploaded image: first.png (1x1, image/png); view it with view_image, passing attachment_id="att-1" verbatim]',
+    })
+    expect(content[1]).toEqual({ type: 'text', text: 'compare' })
     await ctx.fiber.dispose()
   })
 

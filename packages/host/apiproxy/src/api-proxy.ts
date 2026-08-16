@@ -11,7 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
-import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError, AttachmentId, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
@@ -86,6 +86,10 @@ import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
 import type { CallId } from '@deepseek-ai/dsh-llm/brand'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-approval'
+// Type-only: resolves `ctx.get('vision')` — the optional vision sidecar whose
+// presence decides whether pasted images may enter a text-only session as
+// view_image pointers (the admission bridge in `prompt`).
+import type {} from '@deepseek-ai/dsh-vision'
 // Side-effect type import: resolves the `approval/request` waterfall and
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -123,6 +127,118 @@ export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
+
+/**
+ * Replace one admitted image block with the pointer a text-only route can
+ * carry: the image is already durably stored, so the pointer names its
+ * attachment id and the `view_image` argument that fetches it. The model
+ * decides when (and with which focus question) to look, through the same
+ * priority chain as every other view.
+ * @param block - the validated, durably stored image block.
+ * @returns the pointer text block.
+ */
+function visionPointerBlock(block: Extract<ContentBlock, { type: 'image' }>): ContentBlock {
+  const ref = block.attachment
+  const label = ref.name ?? 'image'
+  return {
+    type: 'text',
+    text: `[uploaded image: ${label} (${ref.width}x${ref.height}, ${ref.mediaType}); view it with view_image, passing attachment_id="${String(ref.attachmentId)}" verbatim]`,
+  }
+}
+
+/**
+ * Whether any logged text block names this id as an uploaded-image pointer —
+ * the admission bridge's one-line stand-in for a text-only route's image. The
+ * scan matches the exact quoted form the bridge emits, so an id that merely
+ * appears in prose does not authorize its bytes.
+ * @param events - the session's event stream.
+ * @param attachmentId - the id a browser asked to read.
+ * @returns true when a pointer names the id verbatim.
+ */
+function pointerReferencesImage(events: readonly SessionEvent[], attachmentId: string): boolean {
+  const needle = `attachment_id="${attachmentId}"`
+  for (const event of events) {
+    const data = event.data as { content?: unknown; message?: { content?: unknown }; inserted?: Array<{ content?: unknown }> }
+    const candidateBlocks: (readonly unknown[])[] = [
+      ...(Array.isArray(data.content) ? [data.content as readonly unknown[]] : []),
+      ...(Array.isArray(data.message?.content) ? [data.message.content as readonly unknown[]] : []),
+      ...(data.inserted ?? []).map(message => (Array.isArray(message.content) ? message.content as readonly unknown[] : [])),
+    ]
+    for (const blocks of candidateBlocks) {
+      for (const block of blocks as readonly { type?: unknown; text?: unknown }[]) {
+        if (block.type === 'text' && typeof block.text === 'string' && block.text.includes(needle)) return true
+      }
+    }
+  }
+  return false
+}
+
+/** Decode the browser payload while rejecting non-canonical base64 forms. */
+function decodeBase64(data: string): Uint8Array {
+  const decoded = Buffer.from(data, 'base64')
+  if (data.length === 0 || decoded.toString('base64') !== data) {
+    throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
+  }
+  return new Uint8Array(decoded)
+}
+
+/**
+ * Probe one OpenAI-compatible endpoint's model listing. Both common shapes
+ * answer: the OpenAI `{data: [{id, name?}]}` array and llama.cpp's
+ * `{models: [{model | name}]}` object array.
+ *
+ * @param baseURL - endpoint base; `/models` is appended.
+ * @param bearer - resolved API key; undefined sends no Authorization header.
+ * @param signal - cancellation from the probing request.
+ * @returns the advertised model views.
+ * @throws Error naming the failure: transport, HTTP status, or unusable body.
+ */
+async function fetchVisionModels(
+  baseURL: string,
+  bearer: string | undefined,
+  signal: AbortSignal | undefined,
+): Promise<{ id: string; name?: string }[]> {
+  let response: Response
+  try {
+    response = await fetch(`${baseURL.replace(/\/+$/, '')}/models`, {
+      method: 'GET',
+      redirect: 'error',
+      headers: {
+        ...bearer !== undefined && bearer.length > 0 ? { authorization: `Bearer ${bearer}` } : {},
+        accept: 'application/json',
+      },
+      signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(10_000)]),
+    })
+  } catch (error: unknown) {
+    const code = (error as { cause?: { code?: unknown } } | null | undefined)?.cause?.code
+    throw new Error(`cannot reach ${baseURL}: ${typeof code === 'string' ? code : String(error)}`)
+  }
+  if (!response.ok) {
+    throw new Error(`endpoint answered HTTP ${response.status}`)
+  }
+  let payload: unknown
+  try {
+    payload = await response.json()
+  } catch (error: unknown) {
+    throw new Error(`endpoint body is not JSON: ${String(error)}`)
+  }
+  const list = payload as { data?: unknown; models?: unknown }
+  const entries = Array.isArray(list.data)
+    ? list.data as readonly Record<string, unknown>[]
+    : Array.isArray(list.models)
+      ? list.models as readonly Record<string, unknown>[]
+      : undefined
+  if (entries === undefined) throw new Error('endpoint lists no models in a known shape')
+  const models: { id: string; name?: string }[] = []
+  for (const entry of entries) {
+    const fromId = typeof entry.id === 'string' ? entry.id : undefined
+    const id = fromId ?? (typeof entry.model === 'string' ? entry.model : undefined)
+    if (id === undefined || id.length === 0) continue
+    models.push({ id, ...typeof entry.name === 'string' ? { name: entry.name } : {} })
+  }
+  if (models.length === 0) throw new Error('endpoint advertises no models')
+  return models
+}
 
 /** Validate one prompt as a batch before publishing any durable image object. */
 async function durablePromptContent(ctx: Context, content: readonly PromptContentPart[]): Promise<ContentBlock[]> {
@@ -2398,19 +2514,34 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const hasImage = content.some(part => part.type === 'image')
         const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
           try {
+            let bridged = false
             if (hasImage) {
               const current = selectionFor(agent).current
               const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
               if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('image')) {
-                return err(request, {
-                  code: 'attachment-error',
-                  message: `Model "${current.model}" does not support image input.`,
-                  details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
-                })
+                // A text-only route: an image block in the log would poison
+                // every later request, so it may only enter as a pointer the
+                // model resolves through view_image. Without a usable vision
+                // chain the pointer would name a tool that cannot run, so the
+                // image is refused up front instead.
+                const vision = ctx.get('vision')
+                if (vision === undefined || !vision.hasUsableProvider()) {
+                  return err(request, {
+                    code: 'attachment-error',
+                    message: `Model "${current.model}" does not support image input.`,
+                    details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                  })
+                }
+                bridged = true
               }
             }
             const durable = await durablePromptContent(ctx, content)
-            const message: UserMessage = createUserMessage({ content: durable, source })
+            const message: UserMessage = createUserMessage({
+              content: bridged
+                ? durable.map(block => block.type === 'image' ? visionPointerBlock(block) : block)
+                : durable,
+              source,
+            })
             if (mode === 'steer') agent.steer(message)
             else agent.followup(message)
           } catch (error: unknown) {
@@ -2452,7 +2583,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         const ref = referencedImage(state.events, String(attachmentId))
-        if (ref === undefined) {
+        // A pointer-named id (the admission bridge's one-line text) is as much
+        // a session reference as an image block; the bytes rebuild through the
+        // id-only read because no full reference rides the pointer.
+        const pointerNamed = ref === undefined && pointerReferencesImage(state.events, String(attachmentId))
+        if (ref === undefined && !pointerNamed) {
           return err(request, {
             code: 'attachment-error',
             message: 'Image is not referenced by this session.',
@@ -2460,7 +2595,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         try {
-          const stored = await ctx.attachments.readImage(ref)
+          const stored = ref !== undefined
+            ? await ctx.attachments.readImage(ref)
+            : await ctx.attachments.readImageById(AttachmentId(String(attachmentId)))
           return ok(request, {
             attachment: stored.ref,
             data: Buffer.from(stored.data).toString('base64'),
@@ -3335,6 +3472,36 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             code: 'model-discovery-failed',
             message: error instanceof Error ? error.message : String(error),
             details: { settingsNs, ...baseURL === undefined ? {} : { baseURL } },
+          })
+        }
+      },
+    },
+
+    vision: {
+      async discoverModels(request, signal) {
+        const { baseURL, apiKey, apiKeyEnv } = request.payload
+        if (!URL.canParse(baseURL)) {
+          return err(request, {
+            code: 'vision-discovery-failed',
+            message: 'baseURL must be an absolute URL.',
+            details: { baseURL },
+          })
+        }
+        let bearer = apiKey
+        if (bearer === undefined && apiKeyEnv !== undefined && apiKeyEnv.length > 0) {
+          bearer = (await ctx.get('credentials')?.resolve(credentialRef(apiKeyEnv)))?.value
+        }
+        try {
+          const models = await fetchVisionModels(baseURL, bearer, signal)
+          return ok(request, { models })
+        } catch (error: unknown) {
+          // Every failure here is the user's next move, not a transport fault:
+          // a wrong endpoint, a refused key, or a listing shape we cannot read.
+          // The message names the cause; it never repeats credential material.
+          return err(request, {
+            code: 'vision-discovery-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { baseURL },
           })
         }
       },

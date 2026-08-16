@@ -194,6 +194,48 @@ export async function saveImageFile(root: string, input: SaveImageAttachment, li
 }
 
 /**
+ * Read and verify one content-addressed image by its id alone, rebuilding the
+ * canonical reference from the stored bytes (digest check, then probe).
+ * @param root - attachment store root.
+ * @param attachmentId - the id `saveImageFile` returned.
+ * @param signal - optional cancellation for read and verification work.
+ * @returns the verified bytes and the rebuilt canonical reference.
+ * @throws AttachmentError when the id is invalid, the object is missing or
+ *   corrupt, or its bytes no longer match the id's digest.
+ */
+export async function readImageByIdFile(
+  root: string,
+  attachmentId: ImageAttachmentRef['attachmentId'],
+  signal?: AbortSignal,
+): Promise<StoredImageAttachment> {
+  const match = ID_PATTERN.exec(String(attachmentId))
+  if (match?.[1] === undefined) throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
+  const sha256 = match[1]
+  let data: Uint8Array
+  try {
+    data = new Uint8Array(await readFile(objectPath(root, sha256), { signal }))
+  } catch (error: unknown) {
+    signal?.throwIfAborted()
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
+    throw new AttachmentError('Unable to read image attachment.', 'ATTACHMENT_READ_FAILED', { cause: error })
+  }
+  signal?.throwIfAborted()
+  if (digest(data) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+  // No declared metadata travels with a bare id: the reference is rebuilt from
+  // what the bytes themselves say.
+  if (data.byteLength === 0) throw new AttachmentError('Image is empty.', 'INVALID_IMAGE')
+  const detected = await detectImage(data)
+  const ref: ImageAttachmentRef = {
+    attachmentId,
+    mediaType: detected.mediaType,
+    bytes: data.byteLength,
+    width: detected.width,
+    height: detected.height,
+  }
+  return { ref, data }
+}
+
+/**
  * Read and verify one content-addressed image.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
  * @param ref - reference recorded in the session log.
