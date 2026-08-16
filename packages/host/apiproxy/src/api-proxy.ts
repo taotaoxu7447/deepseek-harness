@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
-import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
@@ -324,6 +324,33 @@ function referencedImage(events: readonly SessionEvent[], attachmentId: string):
     if (found !== undefined) return found
   }
   return undefined
+}
+
+/**
+ * Whether any logged text block names this id as an uploaded-image pointer —
+ * the admission bridge's one-line stand-in for a text-only route's image. The
+ * scan matches the exact quoted form the bridge emits, so an id that merely
+ * appears in prose does not authorize its bytes.
+ * @param events - the session's event stream.
+ * @param attachmentId - the id a browser asked to read.
+ * @returns true when a pointer names the id verbatim.
+ */
+function pointerReferencesImage(events: readonly SessionEvent[], attachmentId: string): boolean {
+  const needle = `attachment_id="${attachmentId}"`
+  for (const event of events) {
+    const data = event.data as { content?: unknown; message?: { content?: unknown }; inserted?: Array<{ content?: unknown }> }
+    const candidateBlocks: (readonly unknown[])[] = [
+      ...(Array.isArray(data.content) ? [data.content as readonly unknown[]] : []),
+      ...(Array.isArray(data.message?.content) ? [data.message.content as readonly unknown[]] : []),
+      ...(data.inserted ?? []).map(message => (Array.isArray(message.content) ? message.content as readonly unknown[] : [])),
+    ]
+    for (const blocks of candidateBlocks) {
+      for (const block of blocks as readonly { type?: unknown; text?: unknown }[]) {
+        if (block.type === 'text' && typeof block.text === 'string' && block.text.includes(needle)) return true
+      }
+    }
+  }
+  return false
 }
 
 /**
@@ -2632,7 +2659,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         const ref = referencedImage(state.events, String(attachmentId))
-        if (ref === undefined) {
+        // A pointer-named id (the admission bridge's one-line text) is as much
+        // a session reference as an image block; the bytes rebuild through the
+        // id-only read because no full reference rides the pointer.
+        const pointerNamed = ref === undefined && pointerReferencesImage(state.events, String(attachmentId))
+        if (ref === undefined && !pointerNamed) {
           return err(request, {
             code: 'attachment-error',
             message: 'Image is not referenced by this session.',
@@ -2640,7 +2671,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         try {
-          const stored = await ctx.attachments.readImage(ref)
+          const stored = ref !== undefined
+            ? await ctx.attachments.readImage(ref)
+            : await ctx.attachments.readImageById(AttachmentId(String(attachmentId)))
           return ok(request, {
             attachment: stored.ref,
             data: Buffer.from(stored.data).toString('base64'),
