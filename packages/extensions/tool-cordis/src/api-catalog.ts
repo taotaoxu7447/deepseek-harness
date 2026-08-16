@@ -382,6 +382,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the verified bytes and canonical reference.',
         throws: ['the signal reason when aborted, or a storage error when verification fails.'],
       },
+      {
+        signature: 'abstract readImageById(attachmentId: AttachmentId, signal?: AbortSignal): Promise<StoredImageAttachment>',
+        description: 'Read one durably stored image by its id alone, rebuilding the canonical reference from the stored bytes. The admission bridge logs images as pointers that name only the id, so a consumer that never saw the original block (a model-driven `view_image` call, for example) can still fetch the verified bytes.',
+        parameters: [{ name: 'attachmentId', description: 'the id `saveImage` returned.' }, { name: 'signal', description: 'optional cancellation for backend read and verification work.' }],
+        returns: 'the verified bytes and the rebuilt canonical reference.',
+        throws: ['the signal reason when aborted, or a storage error when the id is unknown or its bytes fail verification.'],
+      },
     ],
   },
   {
@@ -2026,6 +2033,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'Questions, owner agent, and abort signal.' }],
         returns: 'The answer chosen or typed by the human.',
         throws: ['{UserQuestionError} code `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, or `DELEGATED_CALLER` when that live agent is owned by another agent.'],
+      },
+    ],
+  },
+  {
+    key: 'vision',
+    summary: 'The vision service.',
+    description: 'The vision service. Registered as `ctx.vision` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `VISION_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `VISION_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `VISION_PROVIDER_UNAVAILABLE`.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: VisionProvider): () => void',
+        description: 'Register a vision provider. Throws VisionError `VISION_DUPLICATE_PROVIDER` if its id is already registered. Returns a disposer; disposed with the calling fiber.',
+        parameters: [{ name: 'provider', description: 'the provider; its `id` is the registry key.' }],
+        returns: 'the disposer that unregisters the provider.',
+      },
+      {
+        signature: 'async describe(request: VisionDescribeRequest, signal?: AbortSignal): Promise<VisionDescription>',
+        description: 'Describe one image through the selected provider. Resolves the provider at call time with the selection rules above; throws VisionError when the capability cannot run or the provider call fails.',
+        parameters: [{ name: 'request', description: 'the image and optional focus prompt.' }, { name: 'signal', description: 'optional cancellation forwarded to the provider.' }],
+        returns: 'the description text and the producing model.',
+      },
+      {
+        signature: 'hasUsableProvider(): boolean',
+        description: 'Whether selection would succeed right now — the non-throwing form of the same rules describe resolves with. Admission surfaces use it to decide whether an image has an out-of-band path into the conversation before any message is logged.',
+        parameters: [],
+        returns: 'true when a configured-or-single usable provider exists.',
       },
     ],
   },
@@ -4538,6 +4570,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'VisionDescribeRequest',
+    declaration: 'export interface VisionDescribeRequest {\n    readonly image: VisionImage;\n    readonly prompt?: string;\n}',
+  },
+  {
+    name: 'VisionDescription',
+    declaration: 'export interface VisionDescription {\n    readonly text: string;\n    readonly model: string;\n}',
+  },
+  {
+    name: 'VisionImage',
+    declaration: 'export interface VisionImage {\n    readonly bytes: Uint8Array;\n    readonly mediaType: string;\n}',
+  },
+  {
+    name: 'VisionProvider',
+    declaration: 'export interface VisionProvider {\n    readonly id: string;\n    available(): boolean;\n    describe(request: VisionDescribeRequest, signal?: AbortSignal): Promise<VisionDescription>;\n}',
   },
   {
     name: 'WebBootEntry',

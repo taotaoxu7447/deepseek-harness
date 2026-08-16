@@ -69,7 +69,7 @@ interface StoredImageAttachment {
 }
 ```
 
-`saveImage()` 校验字节并以原子方式提交一个对象，之后才返回其引用。`validateImage()` 执行相同的准入检查，但不持久化任何内容；批量调用方会在保存任何成员前通过它校验所有成员，因此校验拒绝不会留下部分对象。`readImage()` 接受来自已授权会话路径的引用，只在完整性校验通过后返回字节。该服务刻意不规定保留策略：恢复和 fork 后的会话可能共享对象，因此基于引用的垃圾回收会延期实现，而不是与任何一个会话的删除绑定。
+`saveImage()` 校验字节并以原子方式提交一个对象，之后才返回其引用。`validateImage()` 执行相同的准入检查，但不持久化任何内容；批量调用方会在保存任何成员前通过它校验所有成员，因此校验拒绝不会留下部分对象。`readImage()` 接受来自已授权会话路径的引用，只在完整性校验通过后返回字节。`readImageById()` 在调用方只知 id 时从存储字节重建该引用——视觉准入桥落日志的正是这种形式。该服务刻意不规定保留策略：恢复和 fork 后的会话可能共享对象，因此基于引用的垃圾回收会延期实现，而不是与任何一个会话的删除绑定。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -95,16 +95,6 @@ Immutable binary attachment service. Implementations validate bytes before publi
 abstract validateImage(input: SaveImageAttachment): Promise<void>
 
 /**
- * Validate one ordered image batch before committing any member.
- * Validation failures start no writes; storage failures return no partial
- * references, although already published content-addressed objects may stay
- * unreachable until a future retention policy collects them.
- * @param inputs - encoded images in their owning message order.
- * @returns durable references in the exact input order.
- */
-async saveImages(inputs: readonly SaveImageAttachment[]): Promise<readonly ImageAttachmentRef[]>
-
-/**
  * Validate and durably commit one image before its owning session event is appended.
  * @param input - encoded bytes, declared media type, and optional display name.
  * @returns a durable content-addressed reference.
@@ -119,7 +109,21 @@ abstract saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>
  * @throws the signal reason when aborted, or a storage error when verification fails.
  */
 abstract readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment>
+
+/**
+ * Read one durably stored image by its id alone, rebuilding the canonical
+ * reference from the stored bytes. The admission bridge logs images as
+ * pointers that name only the id, so a consumer that never saw the original
+ * block (a model-driven `view_image` call, for example) can still fetch the
+ * verified bytes.
+ * @param attachmentId - the id `saveImage` returned.
+ * @param signal - optional cancellation for backend read and verification work.
+ * @returns the verified bytes and the rebuilt canonical reference.
+ * @throws the signal reason when aborted, or a storage error when the id is
+ *   unknown or its bytes fail verification.
+ */
+abstract readImageById(attachmentId: AttachmentId, signal?: AbortSignal): Promise<StoredImageAttachment>
 ```
 
-Source: [`packages/attachment/attachment/src/index.ts:31`](../../packages/attachment/attachment/src/index.ts)
+Source: [`packages/attachment/attachment/src/index.ts:30`](../../packages/attachment/attachment/src/index.ts)
 <!-- END GENERATED cordis-surface -->
