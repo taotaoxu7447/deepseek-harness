@@ -23,6 +23,12 @@ import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import { messageOf } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
+import {
+  EFFORT_PRESETS,
+  effortPresetText,
+  formatReasoningEfforts,
+  parseReasoningEfforts,
+} from './reasoning-efforts.ts'
 
 /**
  * One configured model row. Structurally open, exactly like the DeepSeek
@@ -178,6 +184,31 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   /** Buffer key for one capacity field; the row half moves when rows do. */
   const bufferKey = (index: number, field: CapacityField): string => `${String(index)}:${field}`
 
+  /** Half-typed effort text, held per row until it parses (same contract as the capacity buffers). */
+  const [effortEditing, setEffortEditing] = useState(new Map<number, string>())
+  /** Rows whose buffered effort text does not parse; the input shows invalid and the draft keeps the last good value. */
+  const [effortInvalid, setEffortInvalid] = useState(new Set<number>())
+  const editEfforts = (index: number, text: string): void => {
+    setEffortEditing(current => new Map(current).set(index, text))
+    const parsed = parseReasoningEfforts(text)
+    if (parsed.ok) {
+      setEffortInvalid((current) => {
+        if (!current.has(index)) return current
+        const next = new Set(current)
+        next.delete(index)
+        return next
+      })
+      patch(index, { reasoningEfforts: parsed.value })
+    } else {
+      setEffortInvalid(current => new Set(current).add(index))
+    }
+  }
+  const effortText = (model: ModelDraft, index: number): string => {
+    const buffered = effortEditing.get(index)
+    if (buffered !== undefined) return buffered
+    return formatReasoningEfforts(model.reasoningEfforts)
+  }
+
   const editCapacity = (index: number, field: CapacityField, text: string): void => {
     setEditing(current => new Map(current).set(bufferKey(index, field), text))
     patch(index, { [field]: parseCapacity(text) })
@@ -210,7 +241,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, string | number | undefined>): void => {
+  const patch = (index: number, next: Record<string, string | number | boolean | null | undefined | Record<string, unknown>>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -395,6 +426,22 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                   return next
                 })
                 setEditing(current => reindexOnRemove(current, index))
+                setEffortEditing((current) => {
+                  const next = new Map<number, string>()
+                  for (const [at, text] of current) {
+                    if (at === index) continue
+                    next.set(at > index ? at - 1 : at, text)
+                  }
+                  return next
+                })
+                setEffortInvalid((current) => {
+                  const next = new Set<number>()
+                  for (const at of current) {
+                    if (at < index) next.add(at)
+                    else if (at > index) next.add(at - 1)
+                  }
+                  return next
+                })
               }}
             >
               <IconTrash />
@@ -428,6 +475,37 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     disabled={disabled}
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
+                </label>
+                <label className={styles['modelField']}>
+                  <span className={styles['modelFieldLabel']}>{t('modelReasoningEfforts')}</span>
+                  <select
+                    className={styles['selectInput']}
+                    aria-label={`${t('modelEffortPreset')} ${index + 1}`}
+                    disabled={disabled}
+                    value=""
+                    onChange={(event) => {
+                      const preset = EFFORT_PRESETS.find(candidate => candidate.id === event.target.value)
+                      if (preset !== undefined) editEfforts(index, effortPresetText(preset))
+                    }}
+                  >
+                    <option value="">{t('modelEffortPreset')}</option>
+                    {EFFORT_PRESETS.map(preset => (
+                      <option key={preset.id} value={preset.id}>{t(`effortPreset.${preset.id}` as never)}</option>
+                    ))}
+                  </select>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    value={effortText(model, index)}
+                    placeholder={t('modelReasoningEffortsPlaceholder')}
+                    aria-label={`${t('modelReasoningEfforts')} ${index + 1}`}
+                    aria-invalid={effortInvalid.has(index) || undefined}
+                    disabled={disabled}
+                    onChange={(event) => { editEfforts(index, event.target.value) }}
+                  />
+                  {effortInvalid.has(index)
+                    ? <span className={styles['error']}>{t('modelReasoningEffortsInvalid')}</span>
+                    : null}
                 </label>
               </div>
             )
