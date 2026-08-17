@@ -62,6 +62,7 @@ export type VisionErrorCode =
   | 'VISION_PROVIDER_AMBIGUOUS'
   | 'VISION_ABORTED'
   | 'VISION_PROVIDER_ERROR'
+  | 'VISION_INPUT_TOO_LARGE'
 
 /** Vision-seam error: route on {@link VisionError.code}, never by parsing `message`. */
 export class VisionError extends HarnessError {}

@@ -15,7 +15,7 @@
 
 `VisionProvider` 即 `{ id, available(): boolean, describe(request, signal?) }`。Provider 不校验图片本身:媒体类型与字节上限校验属于调用方 —— `view_image` 在描述之前先走附件服务的图片策略。
 
-选择语义(与注册顺序无关):配置了 `provider` id 时,它必须已注册且可用(否则 `VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(没有则 `VISION_PROVIDER_UNAVAILABLE`,多个则 `VISION_PROVIDER_AMBIGUOUS`)。
+选择语义(与注册顺序无关):配置了 `provider` id 时,它必须已注册且可用(否则 `VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(没有则 `VISION_PROVIDER_UNAVAILABLE`,多个则 `VISION_PROVIDER_AMBIGUOUS`)。除选择之外,Provider 也可能在任何请求发出之前拒绝调用——链 Provider 的输入估算守卫抛出 `VISION_INPUT_TOO_LARGE`(估算公式见[其 README](../vision-qwen/README.md#input-guard))。
 
 ## Config
 

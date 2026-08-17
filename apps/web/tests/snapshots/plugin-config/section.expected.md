@@ -36,3 +36,7 @@
         - 'button "展开设置: 网页搜索"':
           - text: 网页搜索 DeepSeek 搜索提供方。
           - img
+      - listitem:
+        - 'button "展开设置: 视觉"':
+          - text: 视觉 view_image 工具与粘贴识图背后的视觉模型。优先级 1 先服务；一个后端耗尽尝试次数后自动降级到下一个。
+          - img

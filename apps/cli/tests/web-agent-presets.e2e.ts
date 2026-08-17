@@ -158,6 +158,10 @@ beforeAll(async () => {
 }, 120_000)
 
 describe('the shipped Web composition', () => {
+  it('serves the default vision settings namespace', () => {
+    expect(ctx.settings.describe().map(section => section.ns)).toContain(settingsNamespace('vision'))
+  })
+
   it('leaves the global tool layer empty', () => {
     // Every model-facing tool belongs to a preset, `ask_user_question`
     // included: a tool in the global layer reaches EVERY agent regardless of
@@ -216,7 +220,7 @@ describe('the shipped Web composition', () => {
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
         'ask_user_question', 'bash', 'create_goal', 'edit', 'exit_plan_mode',
         'get_goal', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'list_agents', 'ralph', 'read', 'read_image', 'send_message', 'skill',
-        'subagent', 'subagent_fork', 'todo_write', 'update_goal', 'web_search',
+        'subagent', 'subagent_fork', 'todo_write', 'update_goal', 'view_image', 'web_search',
         'workflow', 'write',
       ])
     } finally {

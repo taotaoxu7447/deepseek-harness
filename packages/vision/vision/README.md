@@ -15,7 +15,7 @@ This package owns the `ctx.vision` key. It ships no provider (mount one, for exa
 
 A `VisionProvider` is `{ id, available(): boolean, describe(request, signal?) }`. Providers validate nothing about the image: media-type and byte-cap validation belong to the caller — `view_image` defers to the attachment service's image policy before describing.
 
-Selection semantics (never order-dependent): a configured `provider` id must be registered and available (`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE` otherwise); without one, exactly one usable provider must be registered (`VISION_PROVIDER_UNAVAILABLE` when none, `VISION_PROVIDER_AMBIGUOUS` when several).
+Selection semantics (never order-dependent): a configured `provider` id must be registered and available (`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE` otherwise); without one, exactly one usable provider must be registered (`VISION_PROVIDER_UNAVAILABLE` when none, `VISION_PROVIDER_AMBIGUOUS` when several). Beyond selection, a provider may refuse a call before any request leaves — the chain provider's estimated-input guard throws `VISION_INPUT_TOO_LARGE` (formula in [its README](../vision-qwen/README.md#input-guard)).
 
 ## Config
 

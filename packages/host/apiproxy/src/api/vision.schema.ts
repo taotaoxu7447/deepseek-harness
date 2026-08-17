@@ -15,6 +15,7 @@ export const visionDiscoverModelsRequestSchema = z.object({
   // secret-bearing payload (`credentials.set`, `settings.update`).
   apiKey: z.string().min(1).optional(),
   apiKeyEnv: z.string().min(1).optional(),
+  protocol: z.enum(['openai-chat', 'openai-responses', 'anthropic']).optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'vision.discoverModels'>>>
 
 const visionModelViewSchema = z.object({

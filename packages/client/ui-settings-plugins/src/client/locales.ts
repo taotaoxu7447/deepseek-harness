@@ -11,13 +11,26 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
-  | 'visionTitle' | 'visionDescription' | 'visionPriority'
+  | 'visionTitle' | 'visionDescription'
   | 'visionMoveUp' | 'visionMoveDown' | 'visionRemove' | 'visionAddBackend'
+  | 'visionDragHandle' | 'visionChainFallback' | 'visionRowDisabled'
+  | 'visionCollapse' | 'visionExpand' | 'visionCollapseAll' | 'visionExpandAll'
+  | 'visionApiKeyStaged'
   | 'visionEnabled' | 'visionEnabledHint'
   | 'visionApiKey' | 'visionApiKeyHint' | 'visionApiKeySet' | 'visionApiKeyUnset'
   | 'visionModel' | 'visionModelHint' | 'visionBaseUrl' | 'visionBaseUrlHint'
   | 'visionProbe' | 'visionProbing' | 'visionPickModel'
   | 'visionAttempts' | 'visionAttemptsHint'
+  | 'visionProtocol' | 'visionProtocolHint' | 'visionProtocolDefault'
+  | 'visionProtocolChat' | 'visionProtocolResponses' | 'visionProtocolAnthropic'
+  | 'visionEffortPreset' | 'visionEffortPresetHint' | 'visionEffortPresetUnset'
+  | 'visionEffortPresetOpenai' | 'visionEffortPresetMimo' | 'visionEffortPresetQwenLocal' | 'visionEffortPresetAnthropic'
+  | 'visionEffortLevel' | 'visionEffortLevelHint' | 'visionEffortLevelUnset'
+  | 'visionEffortNone' | 'visionEffortMinimal' | 'visionEffortLow' | 'visionEffortMedium' | 'visionEffortHigh'
+  | 'visionEffortEnabled' | 'visionEffortEnabledHint' | 'visionEffortEnabledMimoHint'
+  | 'visionThinkingBudget' | 'visionThinkingBudgetHint'
+  | 'visionContextTokens' | 'visionContextTokensHint'
+  | 'visionMaxInputTokens' | 'visionMaxInputTokensHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -60,10 +73,17 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
   visionTitle: 'Vision',
   visionDescription: 'The vision models behind the view_image tool and pasted-image recognition. Priority 1 serves first; a backend failing its attempt budget falls to the next.',
-  visionPriority: 'Priority {n}',
   visionMoveUp: 'Up',
   visionMoveDown: 'Down',
   visionRemove: 'Remove',
+  visionDragHandle: 'Drag to reorder',
+  visionChainFallback: 'Exhausts {n} attempts — the next priority serves',
+  visionRowDisabled: 'Disabled',
+  visionCollapse: 'Collapse',
+  visionExpand: 'Expand',
+  visionCollapseAll: 'Collapse all',
+  visionExpandAll: 'Expand all',
+  visionApiKeyStaged: 'Staged — save to apply',
   visionAddBackend: 'Add backend',
   visionEnabled: 'Enable this backend',
   visionEnabledHint: 'Off parks this backend without reordering the chain.',
@@ -74,12 +94,42 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   visionModel: 'Model',
   visionModelHint: 'Use the probe button to fill this from the endpoint, or type the id.',
   visionBaseUrl: 'Endpoint',
-  visionBaseUrlHint: 'OpenAI-compatible base URL; /chat/completions is appended.',
+  visionBaseUrlHint: 'Base URL of the endpoint; the protocol\'s path (/chat/completions, /responses, /v1/messages) is appended.',
   visionProbe: 'Test & list models',
   visionProbing: 'Probing the endpoint…',
   visionPickModel: 'Pick a model…',
   visionAttempts: 'Attempts per backend',
   visionAttemptsHint: 'Tries before falling to the next priority.',
+  visionProtocol: 'API protocol',
+  visionProtocolHint: 'The wire protocol this endpoint speaks.',
+  visionProtocolDefault: 'Default (OpenAI chat completions)',
+  visionProtocolChat: 'OpenAI chat completions',
+  visionProtocolResponses: 'OpenAI Responses',
+  visionProtocolAnthropic: 'Anthropic Messages',
+  visionEffortPreset: 'Effort preset',
+  visionEffortPresetHint: 'Whose effort vocabulary the model speaks; decides what the effort control sends.',
+  visionEffortPresetUnset: 'No effort parameter',
+  visionEffortPresetOpenai: 'OpenAI (graded levels)',
+  visionEffortPresetMimo: 'Xiaomi MiMo (off/on)',
+  visionEffortPresetQwenLocal: 'Local Qwen (thinking budget)',
+  visionEffortPresetAnthropic: 'Anthropic (thinking budget)',
+  visionEffortLevel: 'Effort level',
+  visionEffortLevelHint: 'Sent as reasoning_effort (chat) or reasoning.effort (Responses).',
+  visionEffortLevelUnset: 'Not set',
+  visionEffortNone: 'none — reasoning off',
+  visionEffortMinimal: 'minimal',
+  visionEffortLow: 'low',
+  visionEffortMedium: 'medium',
+  visionEffortHigh: 'high',
+  visionEffortEnabled: 'Reasoning effort',
+  visionEffortEnabledHint: 'On enables thinking with the configured budget; off disables it.',
+  visionEffortEnabledMimoHint: 'MiMo grades nothing beyond off: on sends "low", off sends "none".',
+  visionThinkingBudget: 'Thinking budget (tokens)',
+  visionThinkingBudgetHint: 'Token cap on the model\'s thinking; Anthropic requires at least 1024 and below the completion budget. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
+  visionContextTokens: 'Context size (tokens)',
+  visionContextTokensHint: 'The model\'s advertised context window; saving fails if the completion budget exceeds it. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
+  visionMaxInputTokens: 'Input limit (tokens)',
+  visionMaxInputTokensHint: 'A describe whose estimated input (text plus image) exceeds this is refused before any request is sent. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
 }
 
 /** Simplified Chinese copy. */
@@ -123,10 +173,17 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
   visionTitle: '视觉',
   visionDescription: 'view_image 工具与粘贴识图背后的视觉模型。优先级 1 先服务；一个后端耗尽尝试次数后自动降级到下一个。',
-  visionPriority: '优先级 {n}',
   visionMoveUp: '上移',
   visionMoveDown: '下移',
   visionRemove: '移除',
+  visionDragHandle: '拖拽调整顺位',
+  visionChainFallback: '失败 {n} 次后由下一顺位服务',
+  visionRowDisabled: '已停用',
+  visionCollapse: '收起',
+  visionExpand: '展开',
+  visionCollapseAll: '全部收起',
+  visionExpandAll: '全部展开',
+  visionApiKeyStaged: '已填写，保存后生效',
   visionAddBackend: '添加后端',
   visionEnabled: '启用此后端',
   visionEnabledHint: '关闭只是停用，不改变链内顺序。',
@@ -137,10 +194,40 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   visionModel: '模型',
   visionModelHint: '点「测试并获取模型」自动填入，或手动输入 id。',
   visionBaseUrl: '接口地址',
-  visionBaseUrlHint: 'OpenAI 兼容的基础 URL；自动追加 /chat/completions。',
+  visionBaseUrlHint: '端点基础 URL；按协议自动追加 /chat/completions、/responses 或 /v1/messages。',
   visionProbe: '测试并获取模型',
   visionProbing: '正在探测端点…',
   visionPickModel: '选择模型…',
   visionAttempts: '每个后端尝试次数',
   visionAttemptsHint: '耗尽此次数后降级到下一优先级。',
+  visionProtocol: 'API 协议',
+  visionProtocolHint: '该端点使用的线路协议。',
+  visionProtocolDefault: '默认（OpenAI 对话补全）',
+  visionProtocolChat: 'OpenAI 对话补全',
+  visionProtocolResponses: 'OpenAI Responses',
+  visionProtocolAnthropic: 'Anthropic Messages',
+  visionEffortPreset: 'effort 预设',
+  visionEffortPresetHint: '模型使用哪家的 effort 语义；决定下方控件发送的参数。',
+  visionEffortPresetUnset: '不发送 effort 参数',
+  visionEffortPresetOpenai: 'OpenAI（分级档位）',
+  visionEffortPresetMimo: '小米 MiMo（开/关）',
+  visionEffortPresetQwenLocal: '本地 Qwen（思考预算）',
+  visionEffortPresetAnthropic: 'Anthropic（思考预算）',
+  visionEffortLevel: 'effort 档位',
+  visionEffortLevelHint: '以 reasoning_effort（对话补全）或 reasoning.effort（Responses）发送。',
+  visionEffortLevelUnset: '不设置',
+  visionEffortNone: 'none — 关闭推理',
+  visionEffortMinimal: 'minimal',
+  visionEffortLow: 'low',
+  visionEffortMedium: 'medium',
+  visionEffortHigh: 'high',
+  visionEffortEnabled: '推理 effort',
+  visionEffortEnabledHint: '开启时按配置的预算思考，关闭则停用。',
+  visionEffortEnabledMimoHint: 'MiMo 服务端不分档位：开发送 "low"，关发送 "none"。',
+  visionThinkingBudget: '思考预算（token）',
+  visionThinkingBudgetHint: '模型思考阶段的 token 上限；Anthropic 要求至少 1024 且低于输出上限。可带 k/m 后缀（×1024/×1024²）。',
+  visionContextTokens: '上下文大小（token）',
+  visionContextTokensHint: '模型标称的上下文窗口；输出上限超过它时保存会被拒绝。可带 k/m 后缀（×1024/×1024²）。',
+  visionMaxInputTokens: '输入上限（token）',
+  visionMaxInputTokensHint: '估算输入（文本加图片）超过此值的 describe 会在发出请求前被拒绝。可带 k/m 后缀（×1024/×1024²）。',
 }

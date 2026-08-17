@@ -5,7 +5,7 @@
  * invalidation frames (settings/credentials/models changed).
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -774,5 +774,70 @@ describe('llm.discoverModels', () => {
 
     expect(error.code).toBe('model-discovery-failed')
     expect(error.message).toContain('no model discovery is registered')
+  })
+})
+
+describe('vision.discoverModels', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' }, ...init })
+  }
+
+  it('probes the OpenAI listing by default, sending a bearer key', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: [{ id: 'qwen-vl', name: 'Qwen VL' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = await harness()
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const value = expectOk(await api.vision.discoverModels(request({
+      baseURL: 'https://vl.acme.example/v1',
+      apiKey: 'probe-key',
+    })))
+
+    expect(value.models).toEqual([{ id: 'qwen-vl', name: 'Qwen VL' }])
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://vl.acme.example/v1/models')
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer probe-key')
+    expect((init.headers as Record<string, string>)['x-api-key']).toBeUndefined()
+  })
+
+  it('probes the Anthropic listing with x-api-key and the version header', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: [{ id: 'claude-sonnet', display_name: 'Claude Sonnet' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = await harness()
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const value = expectOk(await api.vision.discoverModels(request({
+      baseURL: 'https://api.anthropic.example',
+      apiKey: 'sk-ant-probe',
+      protocol: 'anthropic',
+    })))
+
+    expect(value.models).toEqual([{ id: 'claude-sonnet', name: 'Claude Sonnet' }])
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://api.anthropic.example/v1/models')
+    const headers = init.headers as Record<string, string>
+    expect(headers['x-api-key']).toBe('sk-ant-probe')
+    expect(headers.authorization).toBe('Bearer sk-ant-probe')
+    expect(headers['anthropic-version']).toBe('2023-06-01')
+  })
+
+  it('resolves a stored credential for the probe without echoing it in failures', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'nope' }, { status: 403 })))
+    const ctx = await harness()
+    await ctx.credentials.set('VISION_STORED_API_KEY' as Parameters<Context['credentials']['set']>[0], 'stored-probe-key')
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const error = expectErr(await api.vision.discoverModels(request({
+      baseURL: 'https://vl.acme.example/v1',
+      apiKeyEnv: 'VISION_STORED_API_KEY',
+    })))
+
+    expect(error.code).toBe('vision-discovery-failed')
+    expect(error.message).toContain('403')
+    expect(JSON.stringify(error)).not.toContain('stored-probe-key')
   })
 })

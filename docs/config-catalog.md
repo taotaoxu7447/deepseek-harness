@@ -2905,7 +2905,7 @@ export interface Config {
 export interface BackendConfig {
   /** Stable id naming this backend in errors and credential references. */
   id: string
-  /** Endpoint base; `/chat/completions` is appended. Falls back to `$QWEN_BASE_URL`. */
+  /** Endpoint base; the protocol's path is appended. Falls back to `$QWEN_BASE_URL`. */
   baseURL?: string
   /** Vision model id the endpoint serves. */
   model?: string
@@ -2917,10 +2917,33 @@ export interface BackendConfig {
   enabled?: boolean
   /** System instruction for this backend's describe calls. Defaults to the built-in sidecar instruction. */
   instruction?: string
+  /** Wire protocol this backend speaks. Defaults to `openai-chat`. */
+  protocol?: VisionProtocol
+  /** Vendor preset selecting how effort maps onto the wire. Unset sends no effort parameter. */
+  effortPreset?: VisionEffortPreset
+  /** Effort level; meaningful only with the `openai` preset. */
+  effortLevel?: VisionEffortLevel
+  /** Effort toggle; meaningful only with the `mimo`, `qwen-local`, and `anthropic` presets. */
+  effortEnabled?: boolean
+  /** Thinking budget (tokens); meaningful only with the `qwen-local` and `anthropic` presets. */
+  thinkingBudget?: number
+  /** Advertised context window (tokens); the chain's `maxTokens` must not exceed it. */
+  contextTokens?: number
+  /** Estimated-input guard (tokens); a describe whose estimate exceeds it is refused before any request. */
+  maxInputTokens?: number
 }
+
+/** Wire protocols one backend may speak. */
+export type VisionProtocol = 'openai-chat' | 'openai-responses' | 'anthropic'
+
+/** Vendor effort vocabularies the chain maps onto each protocol's wire fields. */
+export type VisionEffortPreset = 'openai' | 'mimo' | 'qwen-local' | 'anthropic'
+
+/** Graded effort levels of the `openai` preset. */
+export type VisionEffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high'
 ```
 
-Source: [`packages/vision/vision-qwen/src/index.ts:81`](../packages/vision/vision-qwen/src/index.ts)
+Source: [`packages/vision/vision-qwen/src/index.ts:109`](../packages/vision/vision-qwen/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 
