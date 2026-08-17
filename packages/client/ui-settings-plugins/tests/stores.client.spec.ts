@@ -545,7 +545,6 @@ describe('WebSearchCardController', () => {
   })
 })
 
-<<<<<<< HEAD
 describe('ConfigurablePluginsTabController', () => {
   function settingsApi(namespaces: string[]) {
     const describe = vi.fn(() => Promise.resolve({
@@ -686,7 +685,9 @@ describe('ConfigurablePluginsTabController', () => {
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot())
       .toEqual({ loaded: true, namespaces: [] })
-=======
+  })
+})
+
 describe('booleanField', () => {
   it('formats the three stored states and parses every accepted draft', () => {
     const spec = booleanField('enabled')
@@ -839,6 +840,5 @@ describe('VisionCardController', () => {
     expect(state.canAdd).toBe(false)
     controller.inject().addRow()
     expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(5)
->>>>>>> 0f661de00d (feat(vision): single Vision settings card — priority-ordered backend chain editor)
   })
 })
