@@ -1,41 +1,74 @@
-"""Render the app icon source: a deep-blue rounded square with a light whale
-mark — approximating the DeepSeek brand without shipping trademarked art."""
+"""Render a light or dark macOS icon from the official whale mark."""
 
-import sys
+import argparse
+import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageDraw
 
 SIZE = 1024
+BACKGROUND_INSET = 32
+BACKGROUND_RADIUS = 230
+MARK_SIZE = 760
+SOURCE_SVG = Path(__file__).resolve().parents[2] / "apps/web/public/favicon.svg"
+APPEARANCE_COLORS = {
+    "light": ((255, 255, 255, 255), (0, 0, 0, 255), (218, 218, 218, 255)),
+    "dark": ((0, 0, 0, 255), (255, 255, 255, 255), (48, 48, 48, 255)),
+}
+
+
+def rasterize_mark(destination: Path) -> None:
+    """Rasterize the official SVG with the macOS system image converter."""
+    subprocess.run(
+        [
+            "/usr/bin/sips",
+            "-s",
+            "format",
+            "png",
+            "-z",
+            str(MARK_SIZE),
+            str(MARK_SIZE),
+            str(SOURCE_SVG),
+            "--out",
+            str(destination),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("output", nargs="?", type=Path, default=Path("icon-1024.png"))
+    parser.add_argument("--appearance", choices=APPEARANCE_COLORS, default="light")
+    return parser.parse_args()
 
 
 def main() -> None:
+    args = parse_args()
+    background, mark_color, outline = APPEARANCE_COLORS[args.appearance]
     image = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-
-    radius = 230
     draw.rounded_rectangle(
-        [32, 32, SIZE - 32, SIZE - 32],
-        radius=radius,
-        fill=(16, 42, 84, 255),
+        [BACKGROUND_INSET, BACKGROUND_INSET, SIZE - BACKGROUND_INSET, SIZE - BACKGROUND_INSET],
+        radius=BACKGROUND_RADIUS,
+        fill=background,
+        outline=outline,
+        width=2,
     )
 
-    # Highlight arc for depth.
-    draw.arc([140, 120, SIZE - 140, SIZE - 160], start=200, end=340, fill=(70, 120, 200, 160), width=36)
+    with TemporaryDirectory(prefix="dsh-macos-icon-") as temporary_directory:
+        mark_path = Path(temporary_directory) / "official-whale.png"
+        rasterize_mark(mark_path)
+        with Image.open(mark_path) as mark_source:
+            mark_alpha = mark_source.convert("RGBA").getchannel("A")
+            mark = Image.new("RGBA", mark_source.size, mark_color)
+            mark.putalpha(mark_alpha)
+            offset = ((SIZE - MARK_SIZE) // 2, (SIZE - MARK_SIZE) // 2)
+            image.alpha_composite(mark, offset)
 
-    # Stylized whale: body arc + tail + eye + waterline spout.
-    cx, cy = SIZE // 2, 560
-    draw.ellipse([cx - 300, cy - 150, cx + 240, cy + 190], fill=(240, 246, 252, 255))
-    draw.polygon(
-        [(cx + 170, cy - 60), (cx + 360, cy - 190), (cx + 330, cy + 40), (cx + 170, cy + 60)],
-        fill=(240, 246, 252, 255),
-    )
-    draw.ellipse([cx - 190, cy - 60, cx - 130, cy], fill=(16, 42, 84, 255))
-    # Belly shade.
-    draw.chord([cx - 300, cy - 150, cx + 240, cy + 190], start=20, end=160, fill=(196, 214, 236, 255))
-    # Spout.
-    draw.rounded_rectangle([cx - 260, cy - 320, cx - 170, cy - 230], radius=45, fill=(240, 246, 252, 255))
-
-    image.save(sys.argv[1] if len(sys.argv) > 1 else "icon-1024.png")
+    image.save(args.output)
 
 
 if __name__ == "__main__":
