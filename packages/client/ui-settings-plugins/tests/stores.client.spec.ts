@@ -782,6 +782,26 @@ describe('VisionCardController', () => {
     expect(host.set).toHaveBeenCalledWith('attemptsPerBackend', 3)
   })
 
+  it('moves a row to an absolute position and ignores no-op and out-of-range moves', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'a' }, { id: 'b' }, { id: 'c' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(3) })
+    const face = controller.inject()
+
+    face.moveRowTo(0, 2)
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows.map(row => row.id)).toEqual(['b', 'c', 'a'])
+    face.moveRowTo(2, 0)
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows.map(row => row.id)).toEqual(['a', 'b', 'c'])
+
+    // A same-index target and out-of-range endpoints change nothing.
+    face.moveRowTo(1, 1)
+    face.moveRowTo(9, 1)
+    face.moveRowTo(0, 9)
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows.map(row => row.id)).toEqual(['a', 'b', 'c'])
+  })
+
   it('probes an endpoint and stages the advertised model', async () => {
     const host = stubSettingsScope<VisionSettings>()
     const w = wire()
@@ -794,7 +814,7 @@ describe('VisionCardController', () => {
     await vi.waitFor(() => {
       expect(controller.inject().hooks.visionCard.getSnapshot().probes[0]?.models).toEqual([{ id: 'found-model' }])
     })
-    expect(w.discoverModels).toHaveBeenCalledWith({ baseURL: 'https://qwen.test/v1', apiKeyEnv: 'VISION_QWEN_API_KEY' })
+    expect(w.discoverModels).toHaveBeenCalledWith({ baseURL: 'https://qwen.test/v1', protocol: 'openai-chat', apiKeyEnv: 'VISION_QWEN_API_KEY' })
     // A single advertised model stages itself.
     expect(controller.inject().hooks.visionCard.getSnapshot().rows[0]?.model).toBe('found-model')
   })
@@ -840,5 +860,423 @@ describe('VisionCardController', () => {
     expect(state.canAdd).toBe(false)
     controller.inject().addRow()
     expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(5)
+  })
+
+  it('round-trips the protocol, effort, and numeric fields from the stored section', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{
+      id: 'claude',
+      baseURL: 'https://anthropic.test',
+      model: 'claude-vision',
+      protocol: 'anthropic',
+      effortPreset: 'anthropic',
+      effortEnabled: true,
+      thinkingBudget: 2048,
+      contextTokens: 200_000,
+      maxInputTokens: 180_000,
+    }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    const state = controller.inject().hooks.visionCard.getSnapshot()
+    expect(state.rows[0]).toMatchObject({ protocol: 'anthropic', effortPreset: 'anthropic', effortEnabled: true })
+    expect(state.rowNumbers[0]).toEqual({ thinkingBudget: '2048', contextTokens: '200000', maxInputTokens: '180000' })
+  })
+
+  it('saves parsed numerics, omits blank drafts, and drops keys cleared to empty', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1', protocol: 'openai-responses', effortPreset: 'openai', effortLevel: 'high' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRow(0, 'protocol', '')          // back to the default: the key leaves the section
+    face.editRow(0, 'effortPreset', 'qwen-local') // a preset switch clears the openai-only level
+    face.editRow(0, 'effortEnabled', true)
+    face.editRowNumber(0, 'thinkingBudget', ' 512 ')
+    face.editRowNumber(0, 'contextTokens', '')
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
+
+    const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
+    const rows = backendsCall[1] as Record<string, unknown>[]
+    expect(rows[0]).toEqual({
+      id: 'qwen',
+      baseURL: 'https://qwen.test/v1',
+      effortPreset: 'qwen-local',
+      effortEnabled: true,
+      thinkingBudget: 512,
+    })
+  })
+
+  it('saves the context and input budgets when staged', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRowNumber(0, 'contextTokens', '131072')
+    face.editRowNumber(0, 'maxInputTokens', '100000')
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
+
+    const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
+    const rows = backendsCall[1] as Record<string, unknown>[]
+    expect(rows[0]).toMatchObject({ contextTokens: 131072, maxInputTokens: 100000 })
+  })
+
+  it('expands k/m suffixes on the staged budget drafts', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRowNumber(0, 'contextTokens', '256k')
+    face.editRowNumber(0, 'maxInputTokens', '1.5m')
+    face.editRowNumber(0, 'thinkingBudget', '2K')
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
+
+    const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
+    const rows = backendsCall[1] as Record<string, unknown>[]
+    expect(rows[0]).toMatchObject({ contextTokens: 262_144, maxInputTokens: 1_572_864, thinkingBudget: 2048 })
+  })
+
+  it('fails the save on a non-numeric budget draft and keeps the section untouched', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRowNumber(0, 'maxInputTokens', 'not-a-number')
+    face.save()
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().failed).toBe(true) })
+
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('probes with the row protocol', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'claude', baseURL: 'https://anthropic.test', protocol: 'anthropic' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().probe(0)
+    await vi.waitFor(() => { expect(w.discoverModels).toHaveBeenCalled() })
+
+    expect(w.discoverModels).toHaveBeenCalledWith(expect.objectContaining({ protocol: 'anthropic' }))
+  })
+
+  it('ignores edits addressed outside the staged chain', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRow(9, 'model', 'ghost')
+    face.editRowNumber(9, 'thinkingBudget', '512')
+    face.editRowKey(9, 'ghost-key')
+    face.moveRow(9, 1)
+    face.removeRow(9)
+    face.probe(9)
+
+    const state = controller.inject().hooks.visionCard.getSnapshot()
+    expect(state.dirty).toBe(false)
+    expect(state.rows).toHaveLength(1)
+    expect(state.rows[0]?.model).toBeUndefined()
+    expect(w.discoverModels).not.toHaveBeenCalled()
+  })
+
+  it('clears an enum draft emptied on any of the three enum fields', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{
+      id: 'qwen',
+      baseURL: 'https://qwen.test/v1',
+      protocol: 'openai-responses',
+      effortPreset: 'openai',
+      effortLevel: 'high',
+    }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRow(0, 'effortLevel', '')
+    face.editRow(0, 'effortPreset', '')
+    face.editRow(0, 'protocol', '')
+
+    const row = controller.inject().hooks.visionCard.getSnapshot().rows[0]
+    expect(row).not.toHaveProperty('effortLevel')
+    expect(row).not.toHaveProperty('effortPreset')
+    expect(row).not.toHaveProperty('protocol')
+  })
+
+  it('keeps an emptied text draft as an empty string rather than deleting the key', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1', model: 'm1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().editRow(0, 'baseURL', '   ')
+
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows[0]?.baseURL).toBe('')
+  })
+
+  it('refuses moves that would leave the chain, and removes rows', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'a', baseURL: 'https://a.test/v1' }, { id: 'b', baseURL: 'https://b.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(2) })
+    const face = controller.inject()
+
+    face.moveRow(0, -1)
+    face.moveRow(1, 1)
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows.map(row => row.id)).toEqual(['a', 'b'])
+
+    face.removeRow(0)
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows.map(row => row.id)).toEqual(['b'])
+    expect(controller.inject().hooks.visionCard.getSnapshot().rowNumbers).toHaveLength(1)
+  })
+
+  it('mints a fresh id when the next ordinal is taken', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'backend-2', baseURL: 'https://a.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().addRow()
+
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows.map(row => row.id)).toEqual(['backend-2', 'backend-3'])
+  })
+
+  it('drops every staged edit on discard', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1', model: 'm1' }], 2)
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRow(0, 'model', 'edited')
+    face.editAttempts('5')
+    face.discard()
+
+    const state = controller.inject().hooks.visionCard.getSnapshot()
+    expect(state.rows[0]?.model).toBe('m1')
+    expect(state.attempts).toBe('2')
+    expect(state.dirty).toBe(false)
+  })
+
+  it('asks for the endpoint before probing, without touching the wire', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen' }, { id: 'blank', baseURL: '   ' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(2) })
+    const face = controller.inject()
+
+    face.probe(0)
+    face.probe(1)
+
+    const probes = controller.inject().hooks.visionCard.getSnapshot().probes
+    expect(probes[0]?.error).toBe('enter the endpoint base URL first')
+    expect(probes[1]?.error).toBe('enter the endpoint base URL first')
+    expect(w.discoverModels).not.toHaveBeenCalled()
+  })
+
+  it('probes with the staged key draft and a declared credential reference', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [
+      { id: 'qwen', baseURL: 'https://qwen.test/v1', model: 'chosen' },
+      { id: 'custom', baseURL: 'https://custom.test/v1', apiKeyEnv: 'MY_VISION_KEY' },
+      { id: 'emptyref', baseURL: 'https://e.test/v1', apiKeyEnv: '' },
+    ])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(3) })
+    const face = controller.inject()
+
+    face.editRowKey(0, ' typed-secret ')
+    face.probe(0)
+    await vi.waitFor(() => { expect(w.discoverModels).toHaveBeenCalledWith({
+      baseURL: 'https://qwen.test/v1',
+      protocol: 'openai-chat',
+      apiKey: 'typed-secret',
+    }) })
+    // One advertised model does not override a model the row already carries.
+    expect(controller.inject().hooks.visionCard.getSnapshot().rows[0]?.model).toBe('chosen')
+
+    face.probe(1)
+    await vi.waitFor(() => { expect(w.discoverModels).toHaveBeenCalledWith(expect.objectContaining({ apiKeyEnv: 'MY_VISION_KEY' })) })
+    // An empty declared reference falls back to the derived default.
+    face.probe(2)
+    await vi.waitFor(() => { expect(w.discoverModels).toHaveBeenCalledWith(expect.objectContaining({ apiKeyEnv: 'VISION_EMPTYREF_API_KEY' })) })
+  })
+
+  it('reports a probe the deployment never answered', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const rejectingApi = {
+      credentials: w.api.credentials,
+      vision: { discoverModels: vi.fn(() => Promise.reject(new Error('network down'))) },
+    } as unknown as Pick<IApiClient, 'credentials' | 'vision'>
+    const controller = new VisionCardController(host.scope, rejectingApi)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }, { id: 'other', baseURL: 'https://other.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(2) })
+
+    controller.inject().probe(0)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.visionCard.getSnapshot().probes[0]?.error)
+        .toBe('the probe could not reach the deployment')
+    })
+  })
+
+  it('reports a probe answer without a result', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const malformedApi = {
+      credentials: w.api.credentials,
+      vision: { discoverModels: vi.fn(() => Promise.resolve({ rpcId: 'v-3' as never })) },
+    } as unknown as Pick<IApiClient, 'credentials' | 'vision'>
+    const controller = new VisionCardController(host.scope, malformedApi)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().probe(0)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.visionCard.getSnapshot().probes[0]?.error).toBe('the probe failed')
+    })
+  })
+
+  it('leaves the model draft alone when the probe advertises several', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire(false, [{ id: 'm1' }, { id: 'm2' }])
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().probe(0)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.visionCard.getSnapshot().probes[0]?.models).toHaveLength(2)
+    })
+
+    const state = controller.inject().hooks.visionCard.getSnapshot()
+    expect(state.rows[0]?.model).toBeUndefined()
+    expect(state.dirty).toBe(false)
+  })
+
+  it('refuses to save while the document is read-only', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    host.publish({
+      status: 'ready',
+      writable: false,
+      value: { backends: [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }] },
+      base: {},
+      user: {},
+    })
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+
+    controller.inject().save()
+    await Promise.resolve()
+
+    expect(host.set).not.toHaveBeenCalled()
+    expect(controller.inject().hooks.visionCard.getSnapshot().saving).toBe(false)
+  })
+
+  it('writes a staged key to the reference the row declares', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1', apiKeyEnv: 'MY_VISION_KEY' }])
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editRowKey(0, 'typed-secret')
+    // The draft echoes in the snapshot so the field can show what was typed.
+    expect(controller.inject().hooks.visionCard.getSnapshot().rowKeys).toEqual(['typed-secret'])
+    face.save()
+    await vi.waitFor(() => { expect(w.set).toHaveBeenCalledWith({ ref: 'MY_VISION_KEY', value: 'typed-secret' }) })
+    // Once the save lands, the reseed clears the draft; the badge carries the state.
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rowKeys).toEqual(['']) })
+  })
+
+  it('keeps the credential badge empty when the read fails or is refused', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire()
+    const rejecting = vi.fn(() => Promise.reject(new Error('wire down')))
+    const refusing = vi.fn(() => Promise.resolve({ rpcId: 'c-3' as never, result: { ok: false as const, error: {} } }))
+    const api = {
+      credentials: { describe: rejecting, set: w.set },
+      vision: w.api.vision,
+    } as unknown as Pick<IApiClient, 'credentials' | 'vision'>
+    const controller = new VisionCardController(host.scope, api)
+    section(host, [
+      { id: 'qwen', baseURL: 'https://qwen.test/v1' },
+      { id: 'custom', baseURL: 'https://custom.test/v1', apiKeyEnv: 'MY_VISION_KEY' },
+    ])
+    await vi.waitFor(() => { expect(rejecting).toHaveBeenCalledWith({ refs: ['VISION_QWEN_API_KEY', 'MY_VISION_KEY'] }) })
+    expect(controller.inject().hooks.visionCard.getSnapshot().credentials).toEqual([])
+
+    // A watched reference re-reads even before any read has landed; the
+    // derived default and the declared reference both watch.
+    controller.refreshCredential('VISION_QWEN_API_KEY')
+    api.credentials = { describe: refusing, set: w.set } as never
+    controller.refreshCredential('MY_VISION_KEY')
+    await vi.waitFor(() => { expect(refusing).toHaveBeenCalled() })
+    expect(controller.inject().hooks.visionCard.getSnapshot().credentials).toEqual([])
+  })
+
+  it('unsets attempts when the staged draft is not a number', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }], 2)
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editAttempts('abc')
+    face.save()
+    await vi.waitFor(() => { expect(host.unset).toHaveBeenCalledWith('attemptsPerBackend') })
+  })
+
+  it('re-reads credentials only for a reference some row watches', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    const w = wire(true)
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [
+      { id: 'qwen', baseURL: 'https://qwen.test/v1' },
+      { id: 'custom', baseURL: 'https://custom.test/v1', apiKeyEnv: 'MY_VISION_KEY' },
+    ])
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.visionCard.getSnapshot().credentials).toHaveLength(2)
+    })
+    const calls = w.describe.mock.calls.length
+
+    controller.refreshCredential('SOMEWHERE_ELSE_API_KEY')
+    controller.refreshCredential('VISION_QWEN_API_KEY')   // the derived default
+    controller.refreshCredential('MY_VISION_KEY')          // the declared reference
+    await vi.waitFor(() => { expect(w.describe.mock.calls.length).toBe(calls + 2) })
   })
 })

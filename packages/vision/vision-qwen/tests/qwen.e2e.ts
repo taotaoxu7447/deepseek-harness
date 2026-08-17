@@ -32,6 +32,7 @@ maybe('QwenVisionProvider real endpoint', () => {
         id: 'live',
         model: model!,
         baseURL: baseURL!,
+        protocol: 'openai-chat',
         resolveApiKey: async () => apiKey,
         instruction: QWEN_DEFAULT_INSTRUCTION,
       }],

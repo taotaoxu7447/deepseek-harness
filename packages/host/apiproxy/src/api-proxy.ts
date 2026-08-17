@@ -95,6 +95,7 @@ import type {} from '@deepseek-ai/dsh-vision'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
+import type { VisionDiscoveryProtocol } from './api/vision.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
 import type { ClientResponse, RpcError, RpcReceipt, RpcRequest, RpcResponse } from './api/rpc.ts'
 import { RpcId } from './api/rpc.ts'
@@ -182,14 +183,19 @@ function decodeBase64(data: string): Uint8Array {
   return new Uint8Array(decoded)
 }
 
+/** `anthropic-version` header value for the Messages listing probe; a protocol constant. */
+const ANTHROPIC_MESSAGES_VERSION = '2023-06-01'
+
 /**
- * Probe one OpenAI-compatible endpoint's model listing. Both common shapes
- * answer: the OpenAI `{data: [{id, name?}]}` array and llama.cpp's
- * `{models: [{model | name}]}` object array.
+ * Probe one vision endpoint's model listing. OpenAI protocols answer
+ * `{baseURL}/models` in either common shape — the OpenAI `{data: [{id,
+ * name?}]}` array and llama.cpp's `{models: [{model | name}]}` object array;
+ * Anthropic answers `{baseURL}/v1/models` with `{data: [{id, display_name?}]}`.
  *
- * @param baseURL - endpoint base; `/models` is appended.
- * @param bearer - resolved API key; undefined sends no Authorization header.
+ * @param baseURL - endpoint base; the protocol's listing path is appended.
+ * @param bearer - resolved API key; undefined sends no authorization header.
  * @param signal - cancellation from the probing request.
+ * @param protocol - the endpoint's wire protocol, selecting path and headers.
  * @returns the advertised model views.
  * @throws Error naming the failure: transport, HTTP status, or unusable body.
  */
@@ -197,14 +203,19 @@ async function fetchVisionModels(
   baseURL: string,
   bearer: string | undefined,
   signal: AbortSignal | undefined,
+  protocol: VisionDiscoveryProtocol,
 ): Promise<{ id: string; name?: string }[]> {
   let response: Response
   try {
-    response = await fetch(`${baseURL.replace(/\/+$/, '')}/models`, {
+    response = await fetch(`${baseURL.replace(/\/+$/, '')}${protocol === 'anthropic' ? '/v1/models' : '/models'}`, {
       method: 'GET',
       redirect: 'error',
       headers: {
         ...bearer !== undefined && bearer.length > 0 ? { authorization: `Bearer ${bearer}` } : {},
+        ...protocol === 'anthropic' ? {
+          'anthropic-version': ANTHROPIC_MESSAGES_VERSION,
+          ...bearer !== undefined && bearer.length > 0 ? { 'x-api-key': bearer } : {},
+        } : {},
         accept: 'application/json',
       },
       signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(10_000)]),
@@ -234,7 +245,10 @@ async function fetchVisionModels(
     const fromId = typeof entry.id === 'string' ? entry.id : undefined
     const id = fromId ?? (typeof entry.model === 'string' ? entry.model : undefined)
     if (id === undefined || id.length === 0) continue
-    models.push({ id, ...typeof entry.name === 'string' ? { name: entry.name } : {} })
+    const name = typeof entry.name === 'string' ? entry.name
+      : typeof entry.display_name === 'string' ? entry.display_name
+        : undefined
+    models.push({ id, ...name === undefined ? {} : { name } })
   }
   if (models.length === 0) throw new Error('endpoint advertises no models')
   return models
@@ -3479,7 +3493,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
     vision: {
       async discoverModels(request, signal) {
-        const { baseURL, apiKey, apiKeyEnv } = request.payload
+        const { baseURL, apiKey, apiKeyEnv, protocol } = request.payload
         if (!URL.canParse(baseURL)) {
           return err(request, {
             code: 'vision-discovery-failed',
@@ -3492,7 +3506,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           bearer = (await ctx.get('credentials')?.resolve(credentialRef(apiKeyEnv)))?.value
         }
         try {
-          const models = await fetchVisionModels(baseURL, bearer, signal)
+          const models = await fetchVisionModels(baseURL, bearer, signal, protocol ?? 'openai-chat')
           return ok(request, { models })
         } catch (error: unknown) {
           // Every failure here is the user's next move, not a transport fault:

@@ -6,7 +6,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SecretField, ValueField } from '../src/client/fields.tsx'
+import { SecretField, SelectField, ToggleField, ValueField } from '../src/client/fields.tsx'
 
 afterEach(cleanup)
 
@@ -83,6 +83,86 @@ describe('ValueField', () => {
 
     expect(screen.getByLabelText('Command timeout')).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
+  })
+})
+
+describe('ToggleField', () => {
+  const toggle = {
+    id: 'enabled',
+    label: 'Enable this backend',
+    hint: 'Off parks this backend.',
+    overriddenLabel: 'Overridden',
+    resetLabel: 'Reset to default',
+    disabled: false,
+    overridden: false,
+  }
+
+  it('reports the check and uncheck as on/off text', () => {
+    const onEdit = vi.fn()
+    render(<ToggleField {...toggle} checked={false} onEdit={onEdit} onReset={vi.fn()} />)
+    const control = screen.getByLabelText('Enable this backend')
+
+    expect(control).toHaveProperty('checked', false)
+    fireEvent.click(control)
+
+    expect(onEdit).toHaveBeenCalledWith('on')
+  })
+
+  it('offers the reset only while an override would stand', () => {
+    const onReset = vi.fn()
+    const { rerender } = render(<ToggleField {...toggle} checked onEdit={vi.fn()} onReset={onReset} />)
+    expect(screen.getByLabelText('Enable this backend')).toHaveProperty('checked', true)
+    expect(screen.queryByRole('button', { name: 'Reset to default' })).toBeNull()
+
+    rerender(<ToggleField {...toggle} overridden checked onEdit={vi.fn()} onReset={onReset} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+
+    expect(onReset).toHaveBeenCalledOnce()
+  })
+
+  it('disables the control while the document is read-only', () => {
+    render(<ToggleField {...toggle} disabled checked onEdit={vi.fn()} onReset={vi.fn()} />)
+
+    expect(screen.getByLabelText('Enable this backend')).toHaveProperty('disabled', true)
+  })
+})
+
+describe('SelectField', () => {
+  const select = {
+    id: 'protocol',
+    label: 'API protocol',
+    hint: 'The wire protocol this endpoint speaks.',
+    disabled: false,
+    placeholder: 'Default (OpenAI chat completions)',
+    options: [
+      { value: 'openai-chat', label: 'OpenAI chat completions' },
+      { value: 'anthropic', label: 'Anthropic Messages' },
+    ],
+  }
+
+  it('renders the placeholder first and stages the picked option', () => {
+    const onEdit = vi.fn()
+    render(<SelectField {...select} value="" onEdit={onEdit} />)
+    const control = screen.getByLabelText('API protocol')
+
+    expect(control).toHaveProperty('value', '')
+    expect(screen.getByRole('option', { name: 'Default (OpenAI chat completions)' })).toBeTruthy()
+
+    fireEvent.change(control, { target: { value: 'anthropic' } })
+
+    expect(onEdit).toHaveBeenCalledWith('anthropic')
+  })
+
+  it('renders the staged value it is given', () => {
+    render(<SelectField {...select} value="openai-chat" onEdit={vi.fn()} />)
+
+    expect(screen.getByLabelText('API protocol')).toHaveProperty('value', 'openai-chat')
+  })
+
+  it('disables the control while the document is read-only', () => {
+    render(<SelectField {...select} disabled value="" onEdit={vi.fn()} />)
+
+    expect(screen.getByLabelText('API protocol')).toHaveProperty('disabled', true)
   })
 })
 

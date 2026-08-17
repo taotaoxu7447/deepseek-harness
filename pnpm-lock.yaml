@@ -291,6 +291,9 @@ importers:
       '@deepseek-ai/dsh-tool-todo':
         specifier: workspace:^
         version: link:../../packages/todo/tool-todo
+      '@deepseek-ai/dsh-tool-vision':
+        specifier: workspace:^
+        version: link:../../packages/vision/tool-vision
       '@deepseek-ai/dsh-tool-web':
         specifier: workspace:^
         version: link:../../packages/web/tool-web
@@ -1219,6 +1222,12 @@ importers:
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:^
         version: link:../../interaction/user-questions
+      '@deepseek-ai/dsh-vision':
+        specifier: workspace:^
+        version: link:../../vision/vision
+      '@deepseek-ai/dsh-vision-qwen':
+        specifier: workspace:^
+        version: link:../../vision/vision-qwen
       '@deepseek-ai/dsh-web':
         specifier: workspace:^
         version: link:../../web/web
@@ -8377,6 +8386,9 @@ importers:
       '@deepseek-ai/dsh-launch-environment':
         specifier: workspace:^
         version: link:../../util/launch-environment
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
       '@deepseek-ai/dsh-settings':
         specifier: workspace:^
         version: link:../../settings/settings

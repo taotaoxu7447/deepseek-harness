@@ -5,7 +5,10 @@
  * writes the whole chain; the probe button answers both "is this endpoint
  * reachable with this key" and "which model ids does it serve" through the
  * vision-discovery domain, so a backend is configured without hand-copying a
- * model id.
+ * model id. Per-row effort, context, and input-limit fields ride the same
+ * section; the Host's section validator rejects contradictory combinations
+ * (an effort preset its protocol cannot carry, a budget over the context
+ * window) at save.
  */
 
 import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
@@ -24,6 +27,18 @@ export const VISION_MAX_BACKENDS = 5
 /** Default attempts per backend, shown before the section carries one. */
 export const DEFAULT_ATTEMPTS = 2
 
+/** Wire protocols a backend row may speak; mirrors the Host's config vocabulary. */
+export type VisionProtocol = 'openai-chat' | 'openai-responses' | 'anthropic'
+
+/** Vendor effort presets; mirrors the Host's config vocabulary. */
+export type VisionEffortPreset = 'openai' | 'mimo' | 'qwen-local' | 'anthropic'
+
+/** Graded effort levels of the `openai` preset; mirrors the Host's config vocabulary. */
+export type VisionEffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high'
+
+/** Per-row numeric fields staged as free text until save parses them. */
+export type VisionRowNumberField = 'thinkingBudget' | 'contextTokens' | 'maxInputTokens'
+
 /**
  * Credential reference a row uses when its draft names none.
  * @param backendId - the row's stable id.
@@ -40,12 +55,29 @@ export interface VisionBackendRow {
   model?: string
   apiKeyEnv?: string
   enabled?: boolean
+  protocol?: VisionProtocol
+  effortPreset?: VisionEffortPreset
+  effortLevel?: VisionEffortLevel
+  effortEnabled?: boolean
+  thinkingBudget?: number
+  contextTokens?: number
+  maxInputTokens?: number
 }
 
 /** The section this card edits. */
 export interface VisionSettings {
   backends?: VisionBackendRow[]
   attemptsPerBackend?: number
+}
+
+/** One row's numeric drafts, staged as text so a half-typed value never rewrites itself. */
+export interface RowNumberDrafts {
+  /** Thinking budget (tokens) for the `qwen-local` and `anthropic` presets. */
+  thinkingBudget: string
+  /** Advertised context window (tokens). */
+  contextTokens: string
+  /** Estimated-input guard (tokens). */
+  maxInputTokens: string
 }
 
 /** One backend's credential state as the credentials domain last reported. */
@@ -82,6 +114,10 @@ export interface VisionCardState {
   invalid: false
   /** The staged chain, in priority order. */
   rows: readonly VisionBackendRow[]
+  /** Per-row numeric drafts, indexed with `rows`. */
+  rowNumbers: readonly RowNumberDrafts[]
+  /** Per-row key drafts, indexed with `rows`; never read back from the credential store. */
+  rowKeys: readonly string[]
   /** Whether another backend row can be added. */
   canAdd: boolean
   /** The staged attempts-per-backend draft. */
@@ -98,10 +134,14 @@ export interface VisionCardFace {
     /** Card snapshot bound by the renderer as useVisionCard. */
     visionCard: SnapshotStore<VisionCardState>
   }
-  /** Edit one staged row's field. */
+  /** Edit one staged row's string or boolean field. */
   editRow: (index: number, field: keyof VisionBackendRow, value: string | boolean) => void
+  /** Stage one row's numeric draft (blank omits the key at save). */
+  editRowNumber: (index: number, field: VisionRowNumberField, value: string) => void
   /** Move one staged row up or down the priority order. */
   moveRow: (index: number, direction: -1 | 1) => void
+  /** Move one staged row to an absolute position in the priority order. */
+  moveRowTo: (from: number, to: number) => void
   /** Remove one staged row. */
   removeRow: (index: number) => void
   /** Append one staged row (id minted from a prefix + order). */
@@ -118,13 +158,83 @@ export interface VisionCardFace {
   discard: () => void
 }
 
+/** Blank row-number drafts for one newly staged row. */
+function blankRowNumbers(): RowNumberDrafts {
+  return { thinkingBudget: '', contextTokens: '', maxInputTokens: '' }
+}
+
+/**
+ * Parse one staged numeric draft.
+ * @param draft - the staged text; a `k`/`m` suffix scales by 1024/1024².
+ * @returns the parsed integer, or `undefined` for a blank draft.
+ * @throws Error on a non-blank draft that is not a number with an optional suffix.
+ */
+function parseRowNumber(draft: string): number | undefined {
+  const trimmed = draft.trim()
+  if (trimmed === '') return undefined
+  const match = /^(\d+(?:\.\d+)?)([kKmM]?)$/.exec(trimmed)
+  if (match === null) throw new Error(`not a number: ${trimmed}`)
+  /* v8 ignore next -- both capture groups always participate in a successful match; the fallback only satisfies noUncheckedIndexedAccess */
+  const suffix = match[2] ?? ''
+  const scale = suffix === '' ? 1 : suffix.toLowerCase() === 'k' ? 1024 : 1024 * 1024
+  /* v8 ignore next -- both capture groups always participate in a successful match; the fallback only satisfies noUncheckedIndexedAccess */
+  return Math.max(1, Math.trunc(Number(match[1] ?? '') * scale))
+}
+
+/**
+ * Apply one staged edit to a row. An empty enum draft deletes the key: '' is
+ * not a member of the protocol/preset/level unions, and absent means "send
+ * nothing". A preset switch selects which effort control renders; values of
+ * the previous preset's control must not leak into the next save.
+ * @param row - the staged row.
+ * @param field - the edited field.
+ * @param value - the staged draft (toggles report 'on'/'off'-derived booleans).
+ * @returns the edited row.
+ */
+function editRowData(row: VisionBackendRow, field: keyof VisionBackendRow, value: string | boolean): VisionBackendRow {
+  // An empty enum draft deletes the key: '' is not a member of the
+  // protocol/preset/level unions, and absent means "send nothing". Clearing
+  // the preset runs the same cascade as switching it (below). An emptied
+  // text field keeps its empty draft instead.
+  if (typeof value === 'string' && value.trim() === ''
+    && (field === 'protocol' || field === 'effortPreset' || field === 'effortLevel')) {
+    const next = { ...row }
+    if (field === 'protocol') delete next.protocol
+    if (field === 'effortPreset') {
+      delete next.effortPreset
+      delete next.effortLevel
+      delete next.effortEnabled
+    }
+    if (field === 'effortLevel') delete next.effortLevel
+    return next
+  }
+  const next: VisionBackendRow = { ...row, [field]: typeof value === 'string' ? value.trim() : value }
+  // A preset switch selects which effort control renders; values of the
+  // previous preset's control must not leak into the next save.
+  if (field === 'effortPreset') {
+    delete next.effortLevel
+    delete next.effortEnabled
+  }
+  return next
+}
+
+/** One staged chain row with its per-row key draft, numeric drafts, and probe state. */
+interface RowEntry {
+  /** The row as it will be written on save. */
+  row: VisionBackendRow
+  /** Staged API key literal; written through the credentials domain on save. */
+  key: string
+  /** Per-row numeric drafts, staged as text so a half-typed value never rewrites itself. */
+  numbers: RowNumberDrafts
+  /** Probe state for this row. */
+  probe: RowProbeState
+}
+
 /** Bridges the `vision` scope, the credentials domain, and model discovery onto the card. */
 export class VisionCardController {
   private readonly store: SnapshotStore<VisionCardState>
-  private rows: VisionBackendRow[] = []
-  private rowKeys: string[] = []
+  private entries: RowEntry[] = []
   private attempts = ''
-  private probes: RowProbeState[] = []
   private credentials: RowCredentialState[] = []
   private dirty = false
   private saving = false
@@ -151,15 +261,26 @@ export class VisionCardController {
   private reseed(): void {
     const snapshot = this.scope.getSnapshot()
     const section = snapshot.value
-    this.rows = (section?.backends ?? []).map(row => ({
-      id: row.id,
-      ...row.baseURL !== undefined ? { baseURL: row.baseURL } : {},
-      ...row.model !== undefined ? { model: row.model } : {},
-      ...row.apiKeyEnv !== undefined ? { apiKeyEnv: row.apiKeyEnv } : {},
-      ...row.enabled !== undefined ? { enabled: row.enabled } : {},
+    this.entries = (section?.backends ?? []).map(row => ({
+      row: {
+        id: row.id,
+        ...row.baseURL !== undefined ? { baseURL: row.baseURL } : {},
+        ...row.model !== undefined ? { model: row.model } : {},
+        ...row.apiKeyEnv !== undefined ? { apiKeyEnv: row.apiKeyEnv } : {},
+        ...row.enabled !== undefined ? { enabled: row.enabled } : {},
+        ...row.protocol !== undefined ? { protocol: row.protocol } : {},
+        ...row.effortPreset !== undefined ? { effortPreset: row.effortPreset } : {},
+        ...row.effortLevel !== undefined ? { effortLevel: row.effortLevel } : {},
+        ...row.effortEnabled !== undefined ? { effortEnabled: row.effortEnabled } : {},
+      },
+      key: '',
+      numbers: {
+        thinkingBudget: row.thinkingBudget !== undefined ? String(row.thinkingBudget) : '',
+        contextTokens: row.contextTokens !== undefined ? String(row.contextTokens) : '',
+        maxInputTokens: row.maxInputTokens !== undefined ? String(row.maxInputTokens) : '',
+      },
+      probe: { probing: false, models: [] },
     }))
-    this.rowKeys = this.rows.map(() => '')
-    this.probes = this.rows.map(() => ({ probing: false, models: [] }))
     this.attempts = section?.attemptsPerBackend !== undefined ? String(section.attemptsPerBackend) : ''
     this.dirty = false
     this.failed = false
@@ -174,10 +295,12 @@ export class VisionCardController {
       saving: this.saving,
       failed: this.failed,
       invalid: false,
-      rows: this.rows,
-      canAdd: this.rows.length < VISION_MAX_BACKENDS,
+      rows: this.entries.map(entry => entry.row),
+      rowNumbers: this.entries.map(entry => entry.numbers),
+      rowKeys: this.entries.map(entry => entry.key),
+      canAdd: this.entries.length < VISION_MAX_BACKENDS,
       attempts: this.attempts,
-      probes: this.probes,
+      probes: this.entries.map(entry => entry.probe),
       credentials: this.credentials,
     }
   }
@@ -190,42 +313,40 @@ export class VisionCardController {
     return {
       hooks: { visionCard: this.store },
       editRow: (index, field, value) => {
-        if (this.rows[index] === undefined) return
-        this.rows = this.rows.map((row, i) => i === index
-          ? { ...row, [field]: typeof value === 'string' ? value.trim() : value }
-          : row)
-        this.probes = this.probes.map((probe, i) => i === index ? { probing: false, models: [] } : probe)
+        const entry = this.entries[index]
+        if (entry === undefined) return
+        entry.row = editRowData(entry.row, field, value)
+        entry.probe = { probing: false, models: [] }
+        this.markDirty()
+      },
+      editRowNumber: (index, field, value) => {
+        const entry = this.entries[index]
+        if (entry === undefined) return
+        entry.numbers = { ...entry.numbers, [field]: value }
         this.markDirty()
       },
       moveRow: (index, direction) => {
-        const target = index + direction
-        if (index < 0 || target < 0 || target >= this.rows.length) return
-        const moved = <T>(list: readonly T[]): T[] => {
-          const copy = [...list]
-          const [item] = copy.splice(index, 1)
-          copy.splice(target, 0, item as T)
-          return copy
-        }
-        this.rows = moved(this.rows)
-        this.rowKeys = moved(this.rowKeys)
-        this.probes = moved(this.probes)
-        this.markDirty()
+        this.moveEntryTo(index, index + direction)
+      },
+      moveRowTo: (from, to) => {
+        this.moveEntryTo(from, to)
       },
       removeRow: (index) => {
-        if (index < 0 || index >= this.rows.length) return
-        this.rows = this.rows.filter((_row, i) => i !== index)
-        this.rowKeys = this.rowKeys.filter((_key, i) => i !== index)
-        this.probes = this.probes.filter((_probe, i) => i !== index)
+        if (this.entries[index] === undefined) return
+        this.entries.splice(index, 1)
         this.markDirty()
       },
       addRow: () => {
-        if (this.rows.length >= VISION_MAX_BACKENDS) return
+        if (this.entries.length >= VISION_MAX_BACKENDS) return
         const prefix = 'backend'
-        let n = this.rows.length + 1
-        while (this.rows.some(row => row.id === `${prefix}-${n}`)) n += 1
-        this.rows = [...this.rows, { id: `${prefix}-${n}`, enabled: true }]
-        this.rowKeys = [...this.rowKeys, '']
-        this.probes = [...this.probes, { probing: false, models: [] }]
+        let n = this.entries.length + 1
+        while (this.entries.some(entry => entry.row.id === `${prefix}-${n}`)) n += 1
+        this.entries.push({
+          row: { id: `${prefix}-${n}`, enabled: true },
+          key: '',
+          numbers: blankRowNumbers(),
+          probe: { probing: false, models: [] },
+        })
         this.markDirty()
       },
       editAttempts: (value) => {
@@ -233,7 +354,9 @@ export class VisionCardController {
         this.markDirty()
       },
       editRowKey: (index, value) => {
-        this.rowKeys = this.rowKeys.map((key, i) => i === index ? value : key)
+        const entry = this.entries[index]
+        if (entry === undefined) return
+        entry.key = value
         this.markDirty()
       },
       probe: (index) => { void this.probeRow(index) },
@@ -248,46 +371,63 @@ export class VisionCardController {
     this.store.set(this.projection())
   }
 
+  /**
+   * Move one staged entry to an absolute position in the chain.
+   * @param from - the entry's current index.
+   * @param to - the target index.
+   */
+  private moveEntryTo(from: number, to: number): void {
+    const entry = this.entries[from]
+    if (entry === undefined || from === to || to < 0 || to >= this.entries.length) return
+    this.entries.splice(from, 1)
+    this.entries.splice(to, 0, entry)
+    this.markDirty()
+  }
+
+  /** Replace one row's probe state and republish. */
+  private setProbe(entry: RowEntry, probe: RowProbeState): void {
+    entry.probe = probe
+    this.store.set(this.projection())
+  }
+
   /** Probe one row's endpoint; the key draft wins over the stored reference. */
   private async probeRow(index: number): Promise<void> {
-    const row = this.rows[index]
-    if (row?.baseURL === undefined || row.baseURL.trim() === '') {
-      this.probes[index] = { probing: false, models: [], error: 'enter the endpoint base URL first' }
-      this.store.set(this.projection())
+    const entry = this.entries[index]
+    if (entry === undefined) return
+    const baseURL = (entry.row.baseURL ?? '').trim()
+    if (baseURL === '') {
+      this.setProbe(entry, { probing: false, models: [], error: 'enter the endpoint base URL first' })
       return
     }
-    const keyDraft = this.rowKeys[index]?.trim() ?? ''
-    const apiKeyEnv = row.apiKeyEnv !== undefined && row.apiKeyEnv.length > 0
-      ? row.apiKeyEnv
-      : defaultKeyRef(row.id)
-    this.probes = this.probes.map((probe, i) => i === index ? { probing: true, models: [] } : probe)
-    this.store.set(this.projection())
+    const keyDraft = entry.key.trim()
+    const apiKeyEnv = entry.row.apiKeyEnv !== undefined && entry.row.apiKeyEnv.length > 0
+      ? entry.row.apiKeyEnv
+      : defaultKeyRef(entry.row.id)
+    this.setProbe(entry, { probing: true, models: [] })
     const response = await this.api.vision.discoverModels({
-      baseURL: row.baseURL.trim(),
+      baseURL,
+      protocol: entry.row.protocol ?? 'openai-chat',
       ...keyDraft.length > 0 ? { apiKey: keyDraft } : {},
       ...keyDraft.length === 0 ? { apiKeyEnv } : {},
     }).catch(() => undefined)
     const result = response?.result
-    if (!result?.ok) {
-      const failure = response === undefined
-        ? 'the probe could not reach the deployment'
-        : response.result.ok ? 'the probe failed' : response.result.error.message
-      this.probes = this.probes.map((probe, i) => i === index
-        ? { probing: false, models: [], error: failure }
-        : probe)
-      this.store.set(this.projection())
+    if (result !== undefined && result.ok) {
+      const advertised = result.value.models
+      this.setProbe(entry, { probing: false, models: advertised })
+      // A single advertised model speaks for itself: stage it.
+      if (advertised.length === 1 && entry.row.model === undefined) {
+        for (const only of advertised) {
+          entry.row = { ...entry.row, model: only.id }
+        }
+        this.dirty = true
+        this.store.set(this.projection())
+      }
       return
     }
-    const advertised = result.value.models
-    this.probes = this.probes.map((probe, i) => i === index ? { probing: false, models: advertised } : probe)
-    // A single advertised model speaks for itself: stage it.
-    if (advertised.length === 1 && row.model === undefined) {
-      this.rows = this.rows.map((candidate, i) => i === index
-        ? { ...candidate, model: advertised[0]?.id ?? '' }
-        : candidate)
-      this.dirty = true
-    }
-    this.store.set(this.projection())
+    const failure = response === undefined
+      ? 'the probe could not reach the deployment'
+      : result === undefined ? 'the probe failed' : result.error.message
+    this.setProbe(entry, { probing: false, models: [], error: failure })
   }
 
   /** Write the staged chain and the staged keys. */
@@ -296,40 +436,60 @@ export class VisionCardController {
     if (!snapshot.writable) return
     this.saving = true
     this.store.set(this.projection())
-    // Capture the staged drafts before the first write: a successful write
-    // republishes the scope synchronously, and the re-seed that follows would
-    // otherwise clear the very drafts this save is still writing.
-    const stagedRows = this.rows.map(row => ({ ...row }))
-    const stagedKeys = [...this.rowKeys]
-    const stagedAttempts = this.attempts.trim()
     try {
-      await this.scope.set('backends', stagedRows)
+      // Capture the staged drafts before the first write: a successful write
+      // republishes the scope synchronously, and the re-seed that follows
+      // would otherwise clear the very drafts this save is still writing.
+      const staged = this.entries.map((entry) => {
+        const thinkingBudget = parseRowNumber(entry.numbers.thinkingBudget)
+        const contextTokens = parseRowNumber(entry.numbers.contextTokens)
+        const maxInputTokens = parseRowNumber(entry.numbers.maxInputTokens)
+        return {
+          row: {
+            ...entry.row,
+            ...thinkingBudget === undefined ? {} : { thinkingBudget },
+            ...contextTokens === undefined ? {} : { contextTokens },
+            ...maxInputTokens === undefined ? {} : { maxInputTokens },
+          },
+          key: entry.key.trim(),
+        }
+      })
+      const stagedAttempts = this.attempts.trim()
+      await this.scope.set('backends', staged.map(entry => entry.row))
       const attempts = Number(stagedAttempts)
       if (stagedAttempts !== '' && Number.isFinite(attempts)) {
         await this.scope.set('attemptsPerBackend', Math.max(1, Math.trunc(attempts)))
       } else {
         await this.scope.unset('attemptsPerBackend')
       }
-      for (const [index, row] of stagedRows.entries()) {
-        const keyDraft = stagedKeys[index]?.trim() ?? ''
-        if (keyDraft.length === 0) continue
+      for (const { row, key } of staged) {
+        if (key.length === 0) continue
         const apiKeyEnv = row.apiKeyEnv !== undefined && row.apiKeyEnv.length > 0
           ? row.apiKeyEnv
           : defaultKeyRef(row.id)
-        await this.api.credentials.set({ ref: apiKeyEnv, value: keyDraft })
+        await this.api.credentials.set({ ref: apiKeyEnv, value: key })
       }
     } catch (_saveFailure) {
       this.failed = true
     } finally {
       this.saving = false
+      // Reseed drops the staged drafts either way; a failure flag, though,
+      // must survive it — the card renders the rejection until the next edit.
+      const failed = this.failed
       this.reseed()
+      if (failed) {
+        this.failed = true
+        this.store.set(this.projection())
+      }
     }
   }
 
   /** Ask the credentials domain about every row's reference, in one batch. */
   private async readCredentials(): Promise<void> {
-    const refs = this.rows.map(row =>
-      row.apiKeyEnv !== undefined && row.apiKeyEnv.length > 0 ? row.apiKeyEnv : defaultKeyRef(row.id))
+    const refs = this.entries.map(entry =>
+      entry.row.apiKeyEnv !== undefined && entry.row.apiKeyEnv.length > 0
+        ? entry.row.apiKeyEnv
+        : defaultKeyRef(entry.row.id))
     if (refs.length === 0) {
       this.credentials = []
       this.store.set(this.projection())
@@ -351,7 +511,7 @@ export class VisionCardController {
    */
   refreshCredential(ref: string): void {
     const watched = this.credentials.some(state => state.ref === ref)
-      || this.rows.some(row => defaultKeyRef(row.id) === ref || row.apiKeyEnv === ref)
+      || this.entries.some(entry => defaultKeyRef(entry.row.id) === ref || entry.row.apiKeyEnv === ref)
     if (watched) void this.readCredentials()
   }
 }

@@ -2,9 +2,10 @@
  * The vision chain provider: every configured backend in priority order, with
  * per-backend attempt budgets and fallback. One backend's failure after its
  * budget falls to the next priority; caller cancellation never falls through.
- * The HTTP shape per backend is the OpenAI-compatible `/chat/completions`
- * wire (local vLLM/SGLang/llama.cpp Qwen VL, ChatGPT Luna, or any other
- * server speaking it); the image rides the request as a base64 data URL.
+ * Each backend speaks one of three wire protocols — OpenAI chat completions
+ * (local vLLM/SGLang/llama.cpp Qwen VL and most compatible gateways), OpenAI
+ * Responses (api.xiaomimimo.com and GPT-5-class endpoints), or Anthropic
+ * Messages — and the image rides the request as base64 either way.
  *
  * Options resolve per call from a thunk, so a settings-section change reaches
  * the very next describe without re-registering the provider.
@@ -12,9 +13,13 @@
  */
 
 import { Buffer } from 'node:buffer'
+import { assertNever } from '@deepseek-ai/dsh-llm'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import { VisionError } from '@deepseek-ai/dsh-vision'
-import type { VisionDescription, VisionProvider } from '@deepseek-ai/dsh-vision'
+import type { VisionDescription, VisionDescribeRequest, VisionImage, VisionProvider } from '@deepseek-ai/dsh-vision'
+import { anthropicEffortFragment, chatEffortFragment, responsesEffortFragment } from './effort.ts'
+import type { VisionEffortOptions } from './effort.ts'
+import { probeImagePixels } from './image-size.ts'
 
 /** Registry id the chain registers under. */
 export const VISION_CHAIN_PROVIDER_ID = 'vision'
@@ -51,17 +56,39 @@ export const QWEN_DEFAULT_ASK = 'Describe this image in detail.'
 /** Attribution header sent on every request. Bump with the package version. */
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
+/** Wire protocols one backend may speak. */
+export type VisionProtocol = 'openai-chat' | 'openai-responses' | 'anthropic'
+
+/** Protocol a backend falls back to when its config names none. */
+export const VISION_DEFAULT_PROTOCOL: VisionProtocol = 'openai-chat'
+
+/** `anthropic-version` header value; a protocol constant pinned to the implemented Messages revision. */
+export const ANTHROPIC_API_VERSION = '2023-06-01'
+
+/** Anthropic's minimum extended-thinking budget (tokens); validation rejects smaller budgets up front. */
+export const ANTHROPIC_MIN_THINKING_BUDGET = 1024
+
+/** Chars per token in the input estimate's text term. */
+export const TEXT_CHARS_PER_TOKEN = 4
+
+/** Pixels per token in the input estimate's image term (a conservative high-detail reading). */
+export const PIXELS_PER_IMAGE_TOKEN = 750
+
 /** One resolved backend for a describe call (the plugin's `apply` builds each from the section). */
-export interface VisionBackendOptions {
+export interface VisionBackendOptions extends VisionEffortOptions {
   /** Stable id naming this backend in errors and credential references. */
   id: string
   /** Vision model id the endpoint serves; empty = not configured. */
   model: string
-  /** Endpoint base; `/chat/completions` is appended; empty = not configured. */
+  /** Endpoint base; the protocol's path is appended; empty = not configured. */
   baseURL: string
+  /** Wire protocol this backend speaks. */
+  protocol: VisionProtocol
+  /** Estimated-input guard (tokens); a describe whose estimate exceeds it is refused before any request. */
+  maxInputTokens?: number
   /**
    * Resolve the API key for an attempt; an empty string sends no
-   * `Authorization` header (a keyless local endpoint).
+   * authorization header (a keyless local endpoint).
    */
   resolveApiKey: () => Promise<string>
   /** System instruction for this backend's describe calls. */
@@ -102,11 +129,11 @@ interface QwenChatResponse {
 }
 
 /**
- * Message fields that may carry the answer, in precedence order. Thinking
- * models served the OpenAI-compatible way sometimes leave `content` empty and
- * put the whole answer in a reasoning field (llama.cpp's `reasoning_content`,
- * some gateways' `reasoning`), so a blank `content` alone must not read as a
- * failed description.
+ * Message fields that may carry the answer on the chat-completions wire, in
+ * precedence order. Thinking models served the OpenAI-compatible way
+ * sometimes leave `content` empty and put the whole answer in a reasoning
+ * field (llama.cpp's `reasoning_content`, some gateways' `reasoning`), so a
+ * blank `content` alone must not read as a failed description.
  */
 const ANSWER_KEYS: readonly string[] = ['content', 'reasoning_content', 'reasoning']
 
@@ -149,43 +176,286 @@ function transportFailureDetail(error: unknown): string {
   return typeof code === 'string' ? `${String(error)} (${code})` : String(error)
 }
 
+/**
+ * Estimate one describe's input size in tokens: text at
+ * {@link TEXT_CHARS_PER_TOKEN} chars per token plus the image at
+ * {@link PIXELS_PER_IMAGE_TOKEN} pixels per token from its probed dimensions,
+ * or — when the header is unreadable — the encoded byte count at the text
+ * rate. The estimate guards configured input limits; it is not a billing
+ * figure.
+ *
+ * @param instruction - the backend's system instruction.
+ * @param prompt - the effective user-turn text.
+ * @param image - the encoded image.
+ * @returns the estimated input tokens.
+ */
+export function estimateInputTokens(instruction: string, prompt: string, image: VisionImage): number {
+  const text = Math.ceil((instruction.length + prompt.length) / TEXT_CHARS_PER_TOKEN)
+  const pixels = probeImagePixels(image.bytes, image.mediaType)
+  return text + (pixels === undefined
+    ? Math.ceil(image.bytes.length / TEXT_CHARS_PER_TOKEN)
+    : Math.ceil((pixels.width * pixels.height) / PIXELS_PER_IMAGE_TOKEN))
+}
+
+/** One backend's request in wire form, plus its response parser. */
+interface BuiltVisionRequest {
+  /** Path appended to the backend's base URL. */
+  readonly path: string
+  /** Body serialized as JSON. */
+  readonly body: Record<string, unknown>
+  /**
+   * Parse a successful response into the description.
+   * @param payload - the parsed response body.
+   * @returns the description text and the producing model.
+   */
+  readonly parse: (payload: unknown) => VisionDescription
+}
+
+/** The image in its two wire encodings. */
+interface EncodedImage {
+  /** Raw base64 (Anthropic `source.data`). */
+  readonly base64: string
+  /** `data:` URL (OpenAI image parts). */
+  readonly dataUrl: string
+}
+
+/** Read one field of `choices[0].message` from a chat-completions response, or `undefined`. */
+function qwenFirstMessageField(payload: QwenChatResponse, field: string): unknown {
+  if (!Array.isArray(payload.choices) || payload.choices.length === 0) return undefined
+  const choice: unknown = payload.choices[0]
+  if (typeof choice !== 'object' || choice === null) return undefined
+  const message = (choice as { readonly message?: unknown }).message
+  if (typeof message !== 'object' || message === null) return undefined
+  return (message as QwenResponseMessage as Record<string, unknown>)[field]
+}
+
+/** Server-reported model id, falling back to the configured one. */
+function reportedModel(payload: { readonly model?: unknown }, fallback: string): string {
+  return typeof payload.model === 'string' && payload.model.length > 0 ? payload.model : fallback
+}
+
+/** Fail a parsed response whose text never materialized. */
+function requireText(backend: VisionBackendOptions, text: string, model: string): VisionDescription {
+  if (text.trim().length === 0) {
+    throw new VisionError(`vision backend "${backend.id}" returned no description text`, 'VISION_PROVIDER_ERROR')
+  }
+  return { text, model }
+}
+
+/** Parse a chat-completions response: the reasoning-field fallbacks, then the text check. */
+function parseChatCompletion(backend: VisionBackendOptions, payload: unknown): VisionDescription {
+  const response = payload as QwenChatResponse
+  for (const key of ANSWER_KEYS) {
+    const text = qwenContentText(qwenFirstMessageField(response, key))
+    if (text.trim().length > 0) return requireText(backend, text, reportedModel(response, backend.model))
+  }
+  return requireText(backend, '', reportedModel(response, backend.model))
+}
+
+/** One `output[]` item of a Responses reply, after JSON parsing. */
+interface ResponsesOutputItem {
+  readonly type?: unknown
+  readonly content?: unknown
+}
+
+/** Parse a Responses reply: the `output_text` convenience field, else the walked message items. */
+function parseResponses(backend: VisionBackendOptions, payload: unknown): VisionDescription {
+  const response = payload as { readonly model?: unknown; readonly output_text?: unknown; readonly output?: unknown }
+  const model = reportedModel(response, backend.model)
+  if (typeof response.output_text === 'string' && response.output_text.trim().length > 0) {
+    return requireText(backend, response.output_text, model)
+  }
+  if (Array.isArray(response.output)) {
+    const parts: string[] = []
+    for (const item of response.output as readonly unknown[]) {
+      if (typeof item !== 'object' || item === null) continue
+      const output = item as ResponsesOutputItem
+      if (output.type !== 'message' || !Array.isArray(output.content)) continue
+      for (const part of output.content as readonly unknown[]) {
+        if (typeof part !== 'object' || part === null) continue
+        const { type, text } = part as QwenContentPart
+        if (type === 'output_text' && typeof text === 'string') parts.push(text)
+      }
+    }
+    if (parts.join('\n').trim().length > 0) return requireText(backend, parts.join('\n'), model)
+  }
+  return requireText(backend, '', model)
+}
+
+/** Parse an Anthropic Messages reply: the text blocks of `content`, thinking blocks dropped. */
+function parseAnthropicMessages(backend: VisionBackendOptions, payload: unknown): VisionDescription {
+  const response = payload as { readonly model?: unknown; readonly content?: unknown }
+  return requireText(backend, qwenContentText(response.content), reportedModel(response, backend.model))
+}
+
+function buildChatCompletion(
+  backend: VisionBackendOptions,
+  ask: string,
+  chain: VisionChainOptions,
+  image: EncodedImage,
+): BuiltVisionRequest {
+  return {
+    path: '/chat/completions',
+    body: {
+      model: backend.model,
+      messages: [
+        { role: 'system', content: backend.instruction },
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: image.dataUrl } },
+            { type: 'text', text: ask },
+          ],
+        },
+      ],
+      max_tokens: chain.maxTokens,
+      temperature: chain.temperature,
+      stream: false,
+      ...chatEffortFragment(backend),
+    },
+    parse: payload => parseChatCompletion(backend, payload),
+  }
+}
+
+function buildResponsesRequest(
+  backend: VisionBackendOptions,
+  ask: string,
+  chain: VisionChainOptions,
+  image: EncodedImage,
+): BuiltVisionRequest {
+  return {
+    path: '/responses',
+    body: {
+      model: backend.model,
+      instructions: backend.instruction,
+      input: [
+        {
+          role: 'user',
+          content: [
+            { type: 'input_image', image_url: image.dataUrl },
+            { type: 'input_text', text: ask },
+          ],
+        },
+      ],
+      max_output_tokens: chain.maxTokens,
+      stream: false,
+      // Reasoning endpoints on this protocol reject any temperature but the
+      // default; the chain's sampling choice stays on the chat-completions wire.
+      ...responsesEffortFragment(backend),
+    },
+    parse: payload => parseResponses(backend, payload),
+  }
+}
+
+function buildAnthropicMessages(
+  backend: VisionBackendOptions,
+  ask: string,
+  chain: VisionChainOptions,
+  image: EncodedImage,
+  mediaType: string,
+): BuiltVisionRequest {
+  const effort = anthropicEffortFragment(backend)
+  return {
+    path: '/v1/messages',
+    body: {
+      model: backend.model,
+      max_tokens: chain.maxTokens,
+      system: backend.instruction,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: image.base64 } },
+            { type: 'text', text: ask },
+          ],
+        },
+      ],
+      // Extended thinking rejects non-default sampling; with thinking off the
+      // chain's temperature applies.
+      ...'thinking' in effort ? {} : { temperature: chain.temperature },
+      ...effort,
+    },
+    parse: payload => parseAnthropicMessages(backend, payload),
+  }
+}
+
+/** Build one backend's request from its protocol. */
+function buildVisionRequest(
+  backend: VisionBackendOptions,
+  ask: string,
+  chain: VisionChainOptions,
+  image: EncodedImage,
+  mediaType: string,
+): BuiltVisionRequest {
+  switch (backend.protocol) {
+    case 'openai-chat': return buildChatCompletion(backend, ask, chain, image)
+    case 'openai-responses': return buildResponsesRequest(backend, ask, chain, image)
+    case 'anthropic': return buildAnthropicMessages(backend, ask, chain, image, mediaType)
+    /* v8 ignore next -- VisionProtocol is closed and every member is handled above */
+    default: return assertNever(backend.protocol)
+  }
+}
+
+/**
+ * Authorization and version headers for one attempt. Anthropic endpoints take
+ * `x-api-key` plus the version header; an Anthropic-compatible proxy may key
+ * off `authorization` instead, so both travel together — mirroring the web
+ * search provider's Anthropic path. Chat and Responses send a bearer token.
+ */
+function protocolHeaders(protocol: VisionProtocol, apiKey: string): Record<string, string> {
+  switch (protocol) {
+    case 'openai-chat':
+    case 'openai-responses':
+      return apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {}
+    case 'anthropic':
+      return {
+        'anthropic-version': ANTHROPIC_API_VERSION,
+        ...apiKey.length > 0 ? { 'x-api-key': apiKey, authorization: `Bearer ${apiKey}` } : {},
+      }
+    /* v8 ignore next -- VisionProtocol is closed and every member is handled above */
+    default: return assertNever(protocol)
+  }
+}
+
+/** Refuse a describe whose estimated input exceeds the backend's configured limit, before any request leaves. */
+function guardInputLimit(backend: VisionBackendOptions, image: VisionImage, ask: string): void {
+  if (backend.maxInputTokens === undefined) return
+  const estimate = estimateInputTokens(backend.instruction, ask, image)
+  if (estimate <= backend.maxInputTokens) return
+  throw new VisionError(
+    `vision backend "${backend.id}" estimated input of ${estimate} tokens exceeds its configured limit of ${backend.maxInputTokens}`,
+    'VISION_INPUT_TOO_LARGE',
+  )
+}
+
 /** One describe attempt against one backend. */
 async function describeOnce(
   backend: VisionBackendOptions,
-  request: Parameters<VisionProvider['describe']>[0],
+  request: VisionDescribeRequest,
   chain: VisionChainOptions,
   signal: AbortSignal | undefined,
 ): Promise<VisionDescription> {
   const apiKey = await backend.resolveApiKey()
-  const dataUrl = `data:${request.image.mediaType};base64,${Buffer.from(request.image.bytes).toString('base64')}`
+  const ask = request.prompt ?? QWEN_DEFAULT_ASK
+  guardInputLimit(backend, request.image, ask)
+  const base64 = Buffer.from(request.image.bytes).toString('base64')
+  const built = buildVisionRequest(backend, ask, chain, {
+    base64,
+    dataUrl: `data:${request.image.mediaType};base64,${base64}`,
+  }, request.image.mediaType)
   using d = deadline(signal, chain.timeoutMs, 'VISION_TIMEOUT')
   let response: Response
   try {
-    response = await fetch(`${backend.baseURL}/chat/completions`, {
+    response = await fetch(`${backend.baseURL}${built.path}`, {
       method: 'POST',
       redirect: 'error',
       headers: {
-        ...apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {},
+        ...protocolHeaders(backend.protocol, apiKey),
         'content-type': 'application/json',
         'accept': 'application/json',
         'user-agent': USER_AGENT,
       },
-      body: JSON.stringify({
-        model: backend.model,
-        messages: [
-          { role: 'system', content: backend.instruction },
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: dataUrl } },
-              { type: 'text', text: request.prompt ?? QWEN_DEFAULT_ASK },
-            ],
-          },
-        ],
-        max_tokens: chain.maxTokens,
-        temperature: chain.temperature,
-        stream: false,
-      }),
+      body: JSON.stringify(built.body),
       signal: d.signal,
     })
   } catch (error: unknown) {
@@ -209,26 +479,17 @@ async function describeOnce(
     throw new VisionError(message, 'VISION_PROVIDER_ERROR')
   }
 
-  let payload: QwenChatResponse
+  let payload: unknown
   try {
-    payload = await response.json() as QwenChatResponse
+    payload = await response.json()
   } catch (error: unknown) {
     if (isAbortError(error)) throw new VisionError('vision request aborted', 'VISION_ABORTED', { cause: error })
     throw new VisionError(`vision backend "${backend.id}" returned an unprocessable response body: ${String(error)}`, 'VISION_PROVIDER_ERROR', { cause: error })
   }
-  let text = ''
-  for (const key of ANSWER_KEYS) {
-    text = qwenContentText(qwenFirstMessageField(payload, key))
-    if (text.trim().length > 0) break
-  }
-  if (text.trim().length === 0) {
-    throw new VisionError(`vision backend "${backend.id}" returned no description text`, 'VISION_PROVIDER_ERROR')
-  }
-  const model = typeof payload.model === 'string' && payload.model.length > 0 ? payload.model : backend.model
-  return { text, model }
+  return built.parse(payload)
 }
 
-/** The OpenAI-compatible vision chain; HTTP redirects fail as `VISION_PROVIDER_ERROR`. */
+/** The multi-protocol vision chain; HTTP redirects fail as `VISION_PROVIDER_ERROR`. */
 export class QwenVisionProvider implements VisionProvider {
   readonly id = VISION_CHAIN_PROVIDER_ID
 
@@ -264,6 +525,10 @@ export class QwenVisionProvider implements VisionProvider {
           const detail = error instanceof Error ? error.message : String(error)
           failures.push(`${backend.id} (attempt ${attempt}/${chain.attemptsPerBackend}): ${detail}`)
           if (signal?.aborted) throw new VisionError('vision request aborted', 'VISION_ABORTED', { cause: error })
+          // An input the backend refused for its size fails every retry of
+          // the same request; only the next priority, with its own limit, can
+          // still serve it.
+          if (error instanceof VisionError && error.code === 'VISION_INPUT_TOO_LARGE') break
         }
       }
     }
@@ -274,19 +539,10 @@ export class QwenVisionProvider implements VisionProvider {
   }
 }
 
-/** Read one field of `choices[0].message` from a chat-completions response, or `undefined`. */
-function qwenFirstMessageField(payload: QwenChatResponse, field: string): unknown {
-  if (!Array.isArray(payload.choices) || payload.choices.length === 0) return undefined
-  const choice: unknown = payload.choices[0]
-  if (typeof choice !== 'object' || choice === null) return undefined
-  const message = (choice as { readonly message?: unknown }).message
-  if (typeof message !== 'object' || message === null) return undefined
-  return (message as QwenResponseMessage as Record<string, unknown>)[field]
-}
-
 /**
- * Extract a human-readable detail from an OpenAI-compatible error body, which
- * nests the message under `error` (string or object) or at the top level.
+ * Extract a human-readable detail from an error body, which nests the message
+ * under `error` (string or object — the OpenAI and Anthropic shapes) or at
+ * the top level.
  *
  * @param body - the parsed error-response body.
  * @returns the server's message, or `undefined` when the body carries none.

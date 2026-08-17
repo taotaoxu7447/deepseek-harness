@@ -61,6 +61,11 @@
   config:
     sampleOverCapGlobResults: false
 
+# The host owns the vision provider chain and attachment policy; this preset
+# decides that its agents may ask the configured sidecar to inspect images.
+- id: tool-vision
+  name: '@deepseek-ai/dsh-tool-vision'
+
 # ── background jobs ────────────────────────────────────────────────────────
 
 # Only the model-facing controls. The task REGISTRY stays on the host plane:

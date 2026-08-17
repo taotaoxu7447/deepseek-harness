@@ -8,7 +8,7 @@
 
 ## Provider selection
 
-Provider 注册进 `ctx.vision`,且不校验图片本身 —— 媒体类型与字节上限校验属于调用方([`dsh-tool-vision`](../../packages/vision/tool-vision/README.md) 在描述之前先走附件服务的图片策略)。选择在执行时解析,与注册顺序无关:配置的 `provider` id 必须已注册且可用(`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(`VISION_PROVIDER_UNAVAILABLE`、`VISION_PROVIDER_AMBIGUOUS`)。重复的注册 id 抛出 `VISION_DUPLICATE_PROVIDER`;后端调用内部的失败呈现为 `VISION_ABORTED`(取消与 Provider 自身超时)或 `VISION_PROVIDER_ERROR`。
+Provider 注册进 `ctx.vision`,且不校验图片本身 —— 媒体类型与字节上限校验属于调用方([`dsh-tool-vision`](../../packages/vision/tool-vision/README.md) 在描述之前先走附件服务的图片策略)。选择在执行时解析,与注册顺序无关:配置的 `provider` id 必须已注册且可用(`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(`VISION_PROVIDER_UNAVAILABLE`、`VISION_PROVIDER_AMBIGUOUS`)。重复的注册 id 抛出 `VISION_DUPLICATE_PROVIDER`;后端调用内部的失败呈现为 `VISION_ABORTED`(取消与 Provider 自身超时)或 `VISION_PROVIDER_ERROR`。Provider 也可能在任何请求发出之前拒绝:链 Provider 的输入估算守卫抛出 `VISION_INPUT_TOO_LARGE`(估算公式见[其 README](../../packages/vision/vision-qwen/README.md#input-guard))。
 
 ## Deployment
 
@@ -20,8 +20,10 @@ Provider 注册进 `ctx.vision`,且不校验图片本身 —— 媒体类型与�
 - id: vision-qwen
   name: '@deepseek-ai/dsh-vision-qwen'
   config:
-    model: qwen2.5-vl-7b-instruct
-    baseURL: 'http://127.0.0.1:8000/v1'
+    backends:
+      - id: local-qwen
+        model: qwen2.5-vl-7b-instruct
+        baseURL: 'http://127.0.0.1:8000/v1'
 - id: tool-vision
   name: '@deepseek-ai/dsh-tool-vision'
 ```

@@ -62,11 +62,12 @@ afterEach(() => {
  * call because a body can only be read once, and the call history is cleared
  * because repeated `spyOn` returns the same spy.
  * @param ctx - context whose `ctx.vision` serves the describe.
+ * @param body - the endpoint's reply; defaults to the chat-completions shape.
  * @returns the URL the provider fetched.
  */
-async function describeOnce(ctx: Context): Promise<string> {
+async function describeOnce(ctx: Context, body: unknown = { choices: [{ message: { content: 'ok' } }] }): Promise<string> {
   const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    .mockImplementation(() => Promise.resolve(jsonResponse({ choices: [{ message: { content: 'ok' } }] })))
+    .mockImplementation(() => Promise.resolve(jsonResponse(body)))
   fetchSpy.mockClear()
   await ctx.vision.describe({ image: IMAGE })
   return String((fetchSpy.mock.calls.at(-1)?.[0] as URL | string | undefined) ?? '')
@@ -129,6 +130,37 @@ describe('vision settings section', () => {
     await bench.pluginFiber.dispose()
 
     expect(bench.ctx.settings.describe().map(row => String(row.ns))).not.toContain('vision')
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('serves a stored anthropic backend on the Messages wire', async () => {
+    const bench = await boot()
+    await bench.ctx.settings.update(VISION_SETTINGS_NAMESPACE, {
+      backends: [{
+        id: 'claude',
+        baseURL: 'https://anthropic.test',
+        model: 'claude-vision',
+        protocol: 'anthropic',
+        effortPreset: 'anthropic',
+        effortEnabled: true,
+        thinkingBudget: 1024,
+      }],
+      maxTokens: 2048,
+    })
+
+    expect(await describeOnce(bench.ctx, { content: [{ type: 'text', text: 'ok' }] })).toBe('https://anthropic.test/v1/messages')
+    await bench.ctx.fiber.dispose()
+  })
+
+  it('rejects a section violating the cross-field rules and keeps the prior one authoritative', async () => {
+    const bench = await boot()
+    expect(await describeOnce(bench.ctx)).toContain('https://entry.test/v1')
+
+    await expect(bench.ctx.settings.update(VISION_SETTINGS_NAMESPACE, {
+      backends: [{ id: 'bad', contextTokens: 4 }],
+    })).rejects.toThrow(/exceeds its context window/)
+
+    expect(await describeOnce(bench.ctx)).toContain('https://entry.test/v1')
     await bench.ctx.fiber.dispose()
   })
 })

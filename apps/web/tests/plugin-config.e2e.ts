@@ -76,10 +76,11 @@ describe('web e2e: plugin configuration section', () => {
     const dialog = await openPlugins()
 
     // Every card the shipped web composition exposes: the shell executor, the
-    // agent loop, and the DeepSeek search provider.
+    // agent loop, DeepSeek search, and the dormant vision provider chain.
     await dialog.getByText('终端', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByText('Agent 循环', { exact: true }).count()).toBe(1)
     expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('视觉', { exact: true }).count()).toBe(1)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('命令超时（毫秒）').count()).toBe(0)
 
@@ -169,6 +170,33 @@ describe('web e2e: plugin configuration section', () => {
       .toBe(false)
     expect(await timeout.inputValue()).toBe('60000')
     expect(await dialog.getByText('已覆盖').count()).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('adds a vision backend with a wire protocol and saves it to the document', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-vision'))
+    const dialog = await openPlugins()
+    await dialog.getByText('视觉', { exact: true }).click()
+
+    await dialog.getByRole('button', { name: '添加后端', exact: true }).click()
+    const endpoint = dialog.getByLabel('接口地址', { exact: true })
+    await endpoint.waitFor({ timeout: 10_000 })
+    await endpoint.fill('http://localhost:8000/v1')
+    await dialog.getByLabel('模型', { exact: true }).fill('qwen3-vl-local')
+    // The protocol select defaults to chat completions; Responses rides the same row.
+    await dialog.getByLabel('API 协议', { exact: true }).selectOption('openai-responses')
+
+    // A second backend draws the chain: two drag handles, one fallback connector.
+    await dialog.getByRole('button', { name: '添加后端', exact: true }).click()
+    await expect.poll(() => dialog.getByRole('button', { name: '拖拽调整顺位' }).count()).toBe(2)
+    expect(await dialog.getByText('失败 2 次后由下一顺位服务').count()).toBe(1)
+
+    expect(await settingsDocument()).not.toContain('openai-responses')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+
+    await expect.poll(async () => (await settingsDocument()).includes('protocol: openai-responses'), { timeout: 10_000 })
+      .toBe(true)
+    expect(await settingsDocument()).toContain('http://localhost:8000/v1')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

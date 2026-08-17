@@ -1,0 +1,126 @@
+/* Vision chain rows: priority badge, drag handle, fallback connector. */
+
+.chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 12px 0;
+}
+
+.row {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3);
+  padding: 4px 12px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.rowDragOver {
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.rowDisabled .rowBody {
+  opacity: 0.55;
+}
+
+.rowBody[hidden] {
+  display: none;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+
+.handle {
+  flex: none;
+  border: none;
+  background: none;
+  padding: 2px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: grab;
+}
+
+.handle:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+}
+
+.handle:disabled {
+  cursor: default;
+}
+
+.badge {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.titleId {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chip {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  font-weight: 500;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chipMuted {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.connector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 4px 22px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.connectorArrow {
+  font-size: 10px;
+  line-height: 1;
+}

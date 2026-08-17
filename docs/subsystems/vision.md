@@ -8,7 +8,7 @@ Source: [`packages/vision/vision/src/index.ts`](../../packages/vision/vision/src
 
 ## Provider selection
 
-Providers register into `ctx.vision` and validate nothing about the image — media-type and byte-cap validation belong to the caller ([`dsh-tool-vision`](../../packages/vision/tool-vision/README.md) defers to the attachment service's image policy before describing). Selection resolves at execution time and never depends on registration order: a configured `provider` id must be registered and available (`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`); without one, exactly one usable provider must be registered (`VISION_PROVIDER_UNAVAILABLE`, `VISION_PROVIDER_AMBIGUOUS`). A duplicate registration id throws `VISION_DUPLICATE_PROVIDER`; failures inside the backend call surface as `VISION_ABORTED` (cancellation and the provider's own deadline) or `VISION_PROVIDER_ERROR`.
+Providers register into `ctx.vision` and validate nothing about the image — media-type and byte-cap validation belong to the caller ([`dsh-tool-vision`](../../packages/vision/tool-vision/README.md) defers to the attachment service's image policy before describing). Selection resolves at execution time and never depends on registration order: a configured `provider` id must be registered and available (`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`); without one, exactly one usable provider must be registered (`VISION_PROVIDER_UNAVAILABLE`, `VISION_PROVIDER_AMBIGUOUS`). A duplicate registration id throws `VISION_DUPLICATE_PROVIDER`; failures inside the backend call surface as `VISION_ABORTED` (cancellation and the provider's own deadline) or `VISION_PROVIDER_ERROR`. A provider may also refuse before any request leaves: the chain provider's estimated-input guard throws `VISION_INPUT_TOO_LARGE` (the estimation formula lives in [its README](../../packages/vision/vision-qwen/README.md#input-guard)).
 
 ## Deployment
 
@@ -20,8 +20,10 @@ Mount the seam plus a provider, and the tool over it:
 - id: vision-qwen
   name: '@deepseek-ai/dsh-vision-qwen'
   config:
-    model: qwen2.5-vl-7b-instruct
-    baseURL: 'http://127.0.0.1:8000/v1'
+    backends:
+      - id: local-qwen
+        model: qwen2.5-vl-7b-instruct
+        baseURL: 'http://127.0.0.1:8000/v1'
 - id: tool-vision
   name: '@deepseek-ai/dsh-tool-vision'
 ```

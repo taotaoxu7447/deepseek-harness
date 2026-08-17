@@ -26,9 +26,11 @@ Harness 需要在纯文本路由上获得图像理解能力,同时不扩大主�
 
 **attachments 条件注册。** 与 `read_image` 相同的组合条件门:没有挂载附件服务,就没有校验字节的权威图片策略,工具不注册。
 
-**设置驱动的配置取代加载期事实。** `vision-qwen` 经 `installSettingsSection` 把组合条目垫在 `vision-qwen` 用户设置小节之下(`llm-deepseek` / `web-search-deepseek` 的模式):Provider 按 describe 投影小节,模型、端点、启用状态与密钥的变更无需重启即达下一次调用;未配置的小节只是停驻 Provider(`available() === false`),而不是让加载失败 —— 网页插件设置卡片(启用开关、模型、接口地址、经凭据域写入的密钥)就是完成配置的预期位置。当配置界面是 UI 时,以带指向的选择拒绝替代加载期报错,才是正确的"响亮"程度。命名空间对浏览器的开放是 `WEB_SETTINGS_NAMESPACES`(`dsh-apiproxy`)中的显式决策,每个小节都必须在那里登记。
+**设置驱动的配置取代加载期事实。** `vision-qwen` 经 `installSettingsSection` 把组合条目垫在 `vision` 用户设置小节之下(`llm-deepseek` / `web-search-deepseek` 的模式):Provider 按 describe 投影小节,后端顺序、模型、端点、启用状态与密钥的变更无需重启即达下一次调用;未配置的小节只是停驻 Provider(`available() === false`),而不是让加载失败 —— 网页插件设置卡片就是完成配置的预期位置。当配置界面是 UI 时,以带页面指向的选择拒绝替代加载期报错,才是正确的失败时点。命名空间对浏览器的开放是 `WEB_SETTINGS_NAMESPACES`(`dsh-apiproxy`)中的显式决策,每个小节都必须在那里登记。
 
-**多后端靠组合、选择靠启用。** 每个视觉后端一行插件(`id` + `settingsSection` + `apiKeyEnv` 配置)各得一张设置卡片;接缝的"恰好一个可用"规则让启用开关成为选择 —— 未加接缝 `provider` 固定而同时启用多个时以 `VISION_PROVIDER_AMBIGUOUS` 拒绝,而不猜测顺序。Provider 包保持 OpenAI 兼容的通用性(Qwen 之名是它的出身,不是它的协议)。
+**默认组合，休眠执行。** base bundle 挂载 `dsh-vision` 与 `dsh-vision-qwen`，完整的 `standard`、`code` 和 `cordis` Agent Preset 挂载 `dsh-tool-vision`。因此 Web 插件页面始终公开 `vision` 小节，完整 agent 始终携带 `view_image`；用户配置启用的后端之前，provider 不发起任何请求。`minimal` 仍是固定双工具 preset，不挂载该 Consumer。
+
+**一个有序链中的多个后端。** 单个 `vision-qwen` provider 从 `vision` 小节投影最多五个已配置后端，并按优先级顺序尝试。每个后端分别持有 id、端点、模型、凭据引用和启用状态；一个后端耗尽尝试预算后降级到下一个。Provider 包保持 OpenAI 兼容的通用性(Qwen 之名是它的出身,不是它的协议)，能力服务则为组合多个 provider 插件的部署保留 provider 选择错误。
 
 **粘贴图片以 view_image 指针方式桥接。** 纯文本路由上的粘贴图片不能简单放行:日志里的图片块会让后续每个请求在 DeepSeek 适配器处失败,这正是产品在门口拒绝它的原因。桥(`dsh-apiproxy` 的 `prompt`)仅在 `ctx.vision.hasUsableProvider()` 成立时放行,持久化存储后,以一行**指针**替代图片块落日志 —— 文件名、尺寸,以及给 `view_image` 的 `attachment_id` 参数。主模型自行决定何时查看、带什么聚焦问题,走与文件查看相同的优先级链;描述调用作为普通工具调用发生在回合内部,进度可见。它取代了早期的"准入即描述"草案 —— 那会把粘贴 RPC 阻塞在视觉模型的整段描述上(本地 27B Q4 需要几十秒,客户端 30 秒单次调用上限超时,转写一片空白,消息稍后才以排队形式浮现)。指针需要仅凭 id 取回字节,因此附件接缝新增 `readImageById`(存储端从字节重建规范引用)。拖拽与粘贴走同一客户端通路。遗留取舍:转写录显示指针文本而非内嵌图片预览。
 
@@ -59,5 +61,4 @@ Harness 需要在纯文本路由上获得图像理解能力,同时不扩大主�
 
 ## Open questions
 
-- 基础 bundle 是否应像 `llm-deepseek` 那样把 `dsh-vision` + `dsh-vision-qwen` 组合进一个 settings 小节,还是保持用户补丁可选?当前:可选。
 - 纯文本路由上 `read_image` 的拒绝消息是否应在 `view_image` 已注册时指向它?耦合是提示层面的、代价低,但两个工具按组合互不相识。

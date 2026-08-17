@@ -32,8 +32,12 @@ export interface FieldProps {
   disabled: boolean
   /** Stage draft text. */
   onEdit: (text: string) => void
-  /** Stage a clear so the field re-inherits the composition layer. */
-  onReset: () => void
+  /**
+   * Stage a clear so the field re-inherits the composition layer. Required
+   * whenever `overridden` can be true; a form whose fields can never stand as
+   * overrides (always `overridden: false`) omits it.
+   */
+  onReset?: () => void
 }
 
 /**
@@ -126,6 +130,43 @@ export function ToggleField(props: Pick<FieldProps, 'id' | 'label' | 'hint' | 'o
         disabled={props.disabled}
         onChange={(event) => { props.onEdit(event.target.checked ? 'on' : 'off') }}
       />
+      <p className={css.hint}>{props.hint}</p>
+    </div>
+  )
+}
+
+/**
+ * A staged enumeration control. Unlike the text fields it never carries an
+ * invalid draft: the option list is the field's accepted set, so no reset or
+ * invalid badge applies.
+ * @param props - the field's copy, its staged value, and the edit action.
+ * @returns the labelled control.
+ */
+export function SelectField(props: Pick<FieldProps, 'id' | 'label' | 'hint' | 'disabled' | 'onEdit'> & {
+  /** Draft value this control renders; '' selects the placeholder option. */
+  value: string
+  /** The accepted options. */
+  options: readonly { value: string; label: string }[]
+  /** Copy for the '' option, rendered first. */
+  placeholder: string
+}) {
+  return (
+    <div className={css.field}>
+      <div className={css.head}>
+        <label className={css.label} htmlFor={props.id}>{props.label}</label>
+      </div>
+      <select
+        id={props.id}
+        className={css.input}
+        value={props.value}
+        disabled={props.disabled}
+        onChange={(event) => { props.onEdit(event.target.value) }}
+      >
+        <option value="">{props.placeholder}</option>
+        {props.options.map(option => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
       <p className={css.hint}>{props.hint}</p>
     </div>
   )

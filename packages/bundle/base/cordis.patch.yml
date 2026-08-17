@@ -106,6 +106,15 @@
     - id: attachment-local
       name: '@deepseek-ai/dsh-attachment-local'
 
+    # The vision sidecar stays dormant until the `vision` settings section
+    # names at least one usable backend. Full agent presets mount `view_image`;
+    # the Web Plugins page edits this live provider chain.
+    - id: vision
+      name: '@deepseek-ai/dsh-vision'
+
+    - id: vision-qwen
+      name: '@deepseek-ai/dsh-vision-qwen'
+
     # Full-text session search is opt-in. `openAt: never` keeps
     # ctx.sessionQuery mounted — exact reads, titles, and lineage traces
     # (session export, subagent-fork Workspace inheritance) stay available —

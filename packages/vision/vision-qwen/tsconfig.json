@@ -12,6 +12,9 @@
       "path": "../vision"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../credentials/credentials"
     },
     {
