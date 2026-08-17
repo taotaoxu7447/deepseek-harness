@@ -20,13 +20,16 @@ swiftc -O -o "$MAC/DeepSeekHarness" "$HERE/main.swift"
 echo "→ generating icon"
 ICONSET="$STAGE/AppIcon.iconset"
 mkdir -p "$ICONSET"
-python3 "$HERE/make-icon.py" "$STAGE/icon-1024.png"
+python3 "$HERE/make-icon.py" --appearance light "$STAGE/AppIconLight.png"
+python3 "$HERE/make-icon.py" --appearance dark "$STAGE/AppIconDark.png"
 for size in 16 32 64 128 256 512; do
-  cp "$STAGE/icon-1024.png" "$ICONSET/icon_${size}x${size}.png"
-  cp "$STAGE/icon-1024.png" "$ICONSET/icon_${size}x${size}@2x.png"
+  cp "$STAGE/AppIconLight.png" "$ICONSET/icon_${size}x${size}.png"
+  cp "$STAGE/AppIconLight.png" "$ICONSET/icon_${size}x${size}@2x.png"
 done
-cp "$STAGE/icon-1024.png" "$ICONSET/icon_512x512@2x.png"
+cp "$STAGE/AppIconLight.png" "$ICONSET/icon_512x512@2x.png"
 iconutil -c icns -o "$RES/AppIcon.icns" "$ICONSET"
+cp "$STAGE/AppIconLight.png" "$RES/AppIconLight.png"
+cp "$STAGE/AppIconDark.png" "$RES/AppIconDark.png"
 
 echo "→ assembling bundle"
 cat > "$APP/Contents/Info.plist" <<'PLIST'

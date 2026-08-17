@@ -14,9 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   var window: NSWindow?
   var webView: WKWebView?
   var pollTimer: Timer?
+  var appearanceObservation: NSKeyValueObservation?
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     makeMenu()
+    observeAppearance()
     Server.ensureRunning { [weak self] in
       self?.showWindow()
     }
@@ -92,6 +94,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     main.addItem(withTitle: "View", action: nil, keyEquivalent: "").submenu = viewSub
 
     NSApp.mainMenu = main
+  }
+
+  private func observeAppearance() {
+    appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.initial, .new]) { [weak self] _, _ in
+      DispatchQueue.main.async {
+        self?.updateApplicationIcon()
+      }
+    }
+  }
+
+  private func updateApplicationIcon() {
+    let match = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+    let resourceName = match == .darkAqua ? "AppIconDark" : "AppIconLight"
+    guard let iconURL = Bundle.main.url(forResource: resourceName, withExtension: "png"),
+          let icon = NSImage(contentsOf: iconURL) else {
+      return
+    }
+    NSApp.applicationIconImage = icon
   }
 
 }
