@@ -118,6 +118,10 @@ class MemoryAttachmentStore extends AttachmentStore {
     if (stored === undefined) throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
     return { ref: stored.ref, data: Uint8Array.from(stored.data) }
   }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused in this test'))
+  }
 }
 
 /** Scripted text response ending in a clean stop. */

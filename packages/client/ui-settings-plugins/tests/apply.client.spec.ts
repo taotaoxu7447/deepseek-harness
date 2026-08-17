@@ -131,7 +131,7 @@ describe('ui-settings-plugins apply', () => {
   it('dispatches the served namespaces its cards claim, and no others', async () => {
     // ui-theme is served but belongs to another surface, and a deployment
     // composing no PowerShell/POSIX executor serves no `bash` at all.
-    const { ctx, slots } = await bench(['agent-loop', 'ui-theme', 'web-search-deepseek'])
+    const { ctx, slots } = await bench(['agent-loop', 'ui-theme', 'web-search-deepseek', 'vision'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
@@ -211,7 +211,7 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(slots.entries('settings.plugin.item')).toHaveLength(3)
+    expect(slots.entries('settings.plugin.item')).toHaveLength(4)
 
     await fiber.dispose()
 

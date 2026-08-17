@@ -142,15 +142,30 @@ function stubAttachments(ctx: Context): { saved: { data: Uint8Array; name?: stri
       mediaTypes: ['image/png'],
     },
     validateImage: (_input: { data: Uint8Array }) => Promise.resolve(),
-    saveImage: (input: { data: Uint8Array; mediaType: 'image/png'; name?: string }) => {
-      saved.push({ data: input.data, ...input.name === undefined ? {} : { name: input.name } })
+    saveImages: (inputs: readonly { data: Uint8Array; mediaType: 'image/png'; name?: string }[]) => {
+      return Promise.resolve(inputs.map((input) => {
+        saved.push({ data: input.data, ...input.name === undefined ? {} : { name: input.name } })
+        return {
+          attachmentId: `att-${saved.length}`,
+          mediaType: input.mediaType,
+          bytes: input.data.byteLength,
+          width: 1,
+          height: 1,
+          ...input.name === undefined ? {} : { name: input.name },
+        }
+      }))
+    },
+    readImageById: (id: { toString(): string }) => {
+      const index = Number(String(id).slice('att-'.length)) - 1
       return Promise.resolve({
-        attachmentId: `att-${saved.length}`,
-        mediaType: input.mediaType,
-        bytes: input.data.byteLength,
-        width: 1,
-        height: 1,
-        ...input.name === undefined ? {} : { name: input.name },
+        ref: {
+          attachmentId: String(id),
+          mediaType: 'image/png',
+          bytes: saved[index]?.data.byteLength ?? 0,
+          width: 1,
+          height: 1,
+        },
+        data: saved[index]?.data ?? new Uint8Array(),
       })
     },
     readImage: (ref: { attachmentId: string }) => {

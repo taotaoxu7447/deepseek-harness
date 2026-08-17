@@ -47,6 +47,10 @@ class RecordingStore extends AttachmentStore {
   readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
     throw new Error('not used')
   }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused in this test'))
+  }
 }
 
 function image(value: number, mediaType: ImageMediaType = 'image/png'): SaveImageAttachment {

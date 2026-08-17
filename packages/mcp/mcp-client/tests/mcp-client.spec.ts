@@ -100,6 +100,10 @@ class RecordingAttachmentStore extends AttachmentStore {
   readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
     throw new Error('not used')
   }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused in this test'))
+  }
 }
 
 /** Exact-route fake used only for image-capability admission. */
