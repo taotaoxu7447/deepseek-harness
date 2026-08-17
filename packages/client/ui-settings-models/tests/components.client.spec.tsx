@@ -897,6 +897,41 @@ describe('ModelsSection', () => {
     })
   })
 
+  it('declares reasoning efforts on a custom model through preset and text', async () => {
+    const { mutate } = await mountSection()
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    fireEvent.click(screen.getByText(en.customized))
+    fireEvent.click(screen.getByText(en.addModel))
+    const ids = screen.getAllByLabelText(new RegExp(en.modelId))
+    fireEvent.change(ids[0] as HTMLInputElement, { target: { value: 'local-flash' } })
+    expandRow(1)
+    const efforts = screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningEfforts} 1`)
+    // Empty text inherits: no reasoningEfforts key rides the draft.
+    expect(efforts.value).toBe('')
+
+    // The DeepSeek V4 preset fills the mapping in one pick.
+    const preset = screen.getByLabelText<HTMLSelectElement>(`${en.modelEffortPreset} 1`)
+    fireEvent.change(preset, { target: { value: 'deepseek-v4' } })
+    expect(efforts.value).toBe('off, high, max')
+
+    // An explicit wire spelling round-trips; a level beyond off cannot go wireless.
+    fireEvent.change(efforts, { target: { value: 'off, high=high, max=ultra' } })
+    expect(efforts.getAttribute('aria-invalid')).toBeNull()
+    fireEvent.change(efforts, { target: { value: 'off, high=' } })
+    expect(efforts.getAttribute('aria-invalid')).toBe('true')
+
+    // Back to a valid declaration and save: the dict is what travels.
+    fireEvent.change(efforts, { target: { value: 'off, high=high, max=ultra' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    const call = mutate.mock.calls[0]?.[0] as { ops: [{ path: string[]; value: unknown }] }
+    const op = call.ops[0]
+    expect(op.path).toEqual(['providers', 'openai', 'models'])
+    expect(op.value).toEqual([
+      { id: 'local-flash', reasoningEfforts: { off: null, high: 'high', max: 'ultra' } },
+    ])
+  })
+
   it('adds a dormant provider with a derived reference and stores its key', async () => {
     const { mutate, set } = await mountSection()
     fireEvent.click(screen.getByText(en.add))
