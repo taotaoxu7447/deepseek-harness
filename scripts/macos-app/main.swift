@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   var webView: WKWebView?
   var pollTimer: Timer?
   var appearanceObservation: NSKeyValueObservation?
+  let navigationDelegate = NavigationDelegate()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     makeMenu()
@@ -49,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func makeWindow() {
     let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 840))
+    view.navigationDelegate = navigationDelegate
     view.load(URLRequest(url: appURL))
     let window = NSWindow(
       contentRect: view.frame,
@@ -116,8 +118,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 }
 
-enum Server {
-  static func isRunning(_ completion: @escaping (Bool) -> Void) {
+// MARK: - Downloads
+
+/// WKWebView never downloads on its own: an `<a download>` click or an
+/// attachment response is silently dropped unless the navigation delegate
+/// converts it into a WKDownload and the download delegate names a
+/// destination. Routes every unrenderable response (the session-log ZIP
+/// carries `Content-Disposition: attachment`) to a uniquified file in
+/// ~/Downloads and reveals it in Finder when it lands.
+final class NavigationDelegate: NSObject, WKNavigationDelegate, WKDownloadDelegate {
+  /// Destination chosen for the in-flight download, revealed on finish.
+  private var destination: URL?
+
+  func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+               decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+    decisionHandler(navigationAction.shouldPerformDownload ? .download : .allow)
+  }
+
+  func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+               decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+    decisionHandler(navigationResponse.canShowMIMEType ? .allow : .download)
+  }
+
+  func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+    download.delegate = self
+  }
+
+  func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+    download.delegate = self
+  }
+
+  func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
+                completionHandler: @escaping (URL?) -> Void) {
+    guard let directory = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
+      completionHandler(nil)
+      return
+    }
+    let name = (suggestedFilename as NSString).deletingPathExtension
+    let ext = (suggestedFilename as NSString).pathExtension
+    var suffix = 0
+    var candidate: URL
+    repeat {
+      suffix += 1
+      let fileName = suffix == 1 ? suggestedFilename : ext.isEmpty ? "\(name)-\(suffix)" : "\(name)-\(suffix).\(ext)"
+      candidate = directory.appendingPathComponent(fileName)
+    } while FileManager.default.fileExists(atPath: candidate.path)
+    destination = candidate
+    completionHandler(candidate)
+  }
+
+  func downloadDidFinish(_ download: WKDownload) {
+    guard let url = destination else { return }
+    destination = nil
+    NSWorkspace.shared.activateFileViewerSelecting([url])
+  }
+
+  func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+    destination = nil
+    let alert = NSAlert()
+    alert.messageText = "Download failed"
+    alert.informativeText = error.localizedDescription
+    alert.runModal()
+  }
+}
+
+enum Server {  static func isRunning(_ completion: @escaping (Bool) -> Void) {
     let task = URLSession.shared.dataTask(with: appURL) { _, response, _ in
       completion((response as? HTTPURLResponse)?.statusCode == 200)
     }
