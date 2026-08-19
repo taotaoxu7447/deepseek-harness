@@ -2,6 +2,9 @@
  * The vision chain provider: every configured backend in priority order, with
  * per-backend attempt budgets and fallback. One backend's failure after its
  * budget falls to the next priority; caller cancellation never falls through.
+ * The budget is spent only on faults an immediate retry could change —
+ * transport failures, timeouts, 5xx, empty replies; a deterministic refusal
+ * (4xx, a 429 credential cooldown, an oversize input) falls at once.
  * Each backend speaks one of three wire protocols — OpenAI chat completions
  * (local vLLM/SGLang/llama.cpp Qwen VL and most compatible gateways), OpenAI
  * Responses (api.xiaomimimo.com and GPT-5-class endpoints), or Anthropic
@@ -16,7 +19,7 @@ import { Buffer } from 'node:buffer'
 import { assertNever } from '@deepseek-ai/dsh-llm'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import { VisionError } from '@deepseek-ai/dsh-vision'
-import type { VisionDescription, VisionDescribeRequest, VisionImage, VisionProvider } from '@deepseek-ai/dsh-vision'
+import type { VisionDescription, VisionDescribeRequest, VisionErrorCode, VisionImage, VisionProvider } from '@deepseek-ai/dsh-vision'
 import { anthropicEffortFragment, chatEffortFragment, responsesEffortFragment } from './effort.ts'
 import type { VisionEffortOptions } from './effort.ts'
 import { probeImagePixels } from './image-size.ts'
@@ -164,6 +167,29 @@ function isAbortError(error: unknown): boolean {
 }
 
 /**
+ * One attempt's failure with the chain's retry classification attached. The
+ * classification is made here, at the throw site, because only here are the
+ * HTTP status and the transport cause both still in hand — by the time the
+ * chain's catch sees the error, they have flattened into a message string.
+ *
+ * `retryable` answers the only question the attempt budget cares about: could
+ * an immediate second attempt against this same backend plausibly succeed?
+ * Transport faults, timeouts, 5xx, and empty or garbled replies can; a 4xx
+ * refusal (auth, unknown model, unsupported image input), a 429 credential
+ * cooldown, and an input over the backend's limit cannot, so the chain falls
+ * to the next priority at once instead of burning the rest of the budget.
+ */
+class AttemptFailure extends VisionError {
+  /** Whether an immediate retry against the same backend could plausibly succeed. */
+  readonly retryable: boolean
+
+  constructor(message: string, code: VisionErrorCode, retryable: boolean, options?: ErrorOptions) {
+    super(message, code, options)
+    this.retryable = retryable
+  }
+}
+
+/**
  * Render a transport failure with its underlying cause code when one rides the
  * exception — `TypeError: fetch failed` alone names no reachable diagnosis,
  * while the cause (`ECONNREFUSED`, `ETIMEDOUT`, …) does.
@@ -237,7 +263,8 @@ function reportedModel(payload: { readonly model?: unknown }, fallback: string):
 /** Fail a parsed response whose text never materialized. */
 function requireText(backend: VisionBackendOptions, text: string, model: string): VisionDescription {
   if (text.trim().length === 0) {
-    throw new VisionError(`vision backend "${backend.id}" returned no description text`, 'VISION_PROVIDER_ERROR')
+    // An empty reply is a model hiccup, not a refusal: the retry may well answer.
+    throw new AttemptFailure(`vision backend "${backend.id}" returned no description text`, 'VISION_PROVIDER_ERROR', true)
   }
   return { text, model }
 }
@@ -422,9 +449,12 @@ function guardInputLimit(backend: VisionBackendOptions, image: VisionImage, ask:
   if (backend.maxInputTokens === undefined) return
   const estimate = estimateInputTokens(backend.instruction, ask, image)
   if (estimate <= backend.maxInputTokens) return
-  throw new VisionError(
+  throw new AttemptFailure(
     `vision backend "${backend.id}" estimated input of ${estimate} tokens exceeds its configured limit of ${backend.maxInputTokens}`,
     'VISION_INPUT_TOO_LARGE',
+    // The same request fails every retry of this backend; only the next
+    // priority, with its own limit, can still serve it.
+    false,
   )
 }
 
@@ -460,7 +490,8 @@ async function describeOnce(
     })
   } catch (error: unknown) {
     if (isAbortError(error) || d.signal.aborted) throw new VisionError('vision request aborted', 'VISION_ABORTED', { cause: error })
-    throw new VisionError(`vision backend "${backend.id}" request failed: ${transportFailureDetail(error)}`, 'VISION_PROVIDER_ERROR', { cause: error })
+    // A socket/DNS/connection fault is the transient case par excellence.
+    throw new AttemptFailure(`vision backend "${backend.id}" request failed: ${transportFailureDetail(error)}`, 'VISION_PROVIDER_ERROR', true, { cause: error })
   }
 
   if (!response.ok) {
@@ -476,7 +507,10 @@ async function describeOnce(
       // malformed/non-JSON error body (normal for gateway 5xx/429s) can only
       // cost a richer provider message, never the real error.
     }
-    throw new VisionError(message, 'VISION_PROVIDER_ERROR')
+    // 5xx and 408 are worth one more attempt; a 4xx refusal — auth, unknown
+    // model, unsupported input — is deterministic, and a 429 cooldown will
+    // not clear within the lifetime of this call.
+    throw new AttemptFailure(message, 'VISION_PROVIDER_ERROR', status >= 500 || status === 408)
   }
 
   let payload: unknown
@@ -484,7 +518,8 @@ async function describeOnce(
     payload = await response.json()
   } catch (error: unknown) {
     if (isAbortError(error)) throw new VisionError('vision request aborted', 'VISION_ABORTED', { cause: error })
-    throw new VisionError(`vision backend "${backend.id}" returned an unprocessable response body: ${String(error)}`, 'VISION_PROVIDER_ERROR', { cause: error })
+    // A gateway that answers 200 with garbage is having a moment, not stating a policy.
+    throw new AttemptFailure(`vision backend "${backend.id}" returned an unprocessable response body: ${String(error)}`, 'VISION_PROVIDER_ERROR', true, { cause: error })
   }
   return built.parse(payload)
 }
@@ -525,10 +560,10 @@ export class QwenVisionProvider implements VisionProvider {
           const detail = error instanceof Error ? error.message : String(error)
           failures.push(`${backend.id} (attempt ${attempt}/${chain.attemptsPerBackend}): ${detail}`)
           if (signal?.aborted) throw new VisionError('vision request aborted', 'VISION_ABORTED', { cause: error })
-          // An input the backend refused for its size fails every retry of
-          // the same request; only the next priority, with its own limit, can
-          // still serve it.
-          if (error instanceof VisionError && error.code === 'VISION_INPUT_TOO_LARGE') break
+          // A failure no immediate retry can change — a 4xx refusal, a 429
+          // cooldown, an input over this backend's limit — spends the rest of
+          // this backend's budget nowhere; only the next priority can serve.
+          if (error instanceof AttemptFailure && !error.retryable) break
         }
       }
     }
