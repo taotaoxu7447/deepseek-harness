@@ -118,6 +118,8 @@ export interface VisionCardState {
   rowNumbers: readonly RowNumberDrafts[]
   /** Per-row key drafts, indexed with `rows`; never read back from the credential store. */
   rowKeys: readonly string[]
+  /** Per-row "already configured" flag, indexed with `rows`; the card collapses those rows by default. */
+  rowConfigured: readonly boolean[]
   /** Whether another backend row can be added. */
   canAdd: boolean
   /** The staged attempts-per-backend draft. */
@@ -228,6 +230,12 @@ interface RowEntry {
   numbers: RowNumberDrafts
   /** Probe state for this row. */
   probe: RowProbeState
+  /**
+   * Whether this row arrived from the stored section with a model filled.
+   * Stored-and-filled rows collapse by default; a row added this session (or a
+   * stored row missing its model, which needs attention) starts expanded.
+   */
+  configured: boolean
 }
 
 /** Bridges the `vision` scope, the credentials domain, and model discovery onto the card. */
@@ -280,6 +288,7 @@ export class VisionCardController {
         maxInputTokens: row.maxInputTokens !== undefined ? String(row.maxInputTokens) : '',
       },
       probe: { probing: false, models: [] },
+      configured: (row.model ?? '').trim() !== '',
     }))
     this.attempts = section?.attemptsPerBackend !== undefined ? String(section.attemptsPerBackend) : ''
     this.dirty = false
@@ -298,6 +307,7 @@ export class VisionCardController {
       rows: this.entries.map(entry => entry.row),
       rowNumbers: this.entries.map(entry => entry.numbers),
       rowKeys: this.entries.map(entry => entry.key),
+      rowConfigured: this.entries.map(entry => entry.configured),
       canAdd: this.entries.length < VISION_MAX_BACKENDS,
       attempts: this.attempts,
       probes: this.entries.map(entry => entry.probe),
@@ -346,6 +356,7 @@ export class VisionCardController {
           key: '',
           numbers: blankRowNumbers(),
           probe: { probing: false, models: [] },
+          configured: false,
         })
         this.markDirty()
       },

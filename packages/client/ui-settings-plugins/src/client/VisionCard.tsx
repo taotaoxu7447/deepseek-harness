@@ -299,7 +299,13 @@ export function VisionCard(props: VisionCardProps) {
   const disabled = !state.writable
   const [dragFrom, setDragFrom] = useState<number | undefined>(undefined)
   const [dragOver, setDragOver] = useState<number | undefined>(undefined)
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  // Collapse state = this override map over the controller's default: rows that
+  // arrived from the stored section already configured start collapsed, rows
+  // added this session start expanded. Overrides key on the row id so a drag
+  // reorder keeps each row's state.
+  const [collapseOverrides, setCollapseOverrides] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const rowCollapsed = (index: number, id: string): boolean =>
+    collapseOverrides.get(id) ?? state.rowConfigured[index] ?? false
   const drag: VisionRowDrag = {
     from: dragFrom,
     over: dragOver,
@@ -324,14 +330,12 @@ export function VisionCard(props: VisionCardProps) {
     },
   }
   const attempts = state.attempts.trim() === '' ? '2' : state.attempts.trim()
-  const allCollapsed = state.rows.length > 0 && state.rows.every(row => collapsed.has(row.id))
-  const toggleOne = (id: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const allCollapsed = state.rows.length > 0 && state.rows.every((row, index) => rowCollapsed(index, row.id))
+  const toggleOne = (index: number, id: string) => {
+    setCollapseOverrides(prev => new Map(prev).set(id, !rowCollapsed(index, id)))
+  }
+  const setAllCollapsed = (value: boolean) => {
+    setCollapseOverrides(new Map(state.rows.map(row => [row.id, value])))
   }
   return (
     <PluginCard
@@ -352,8 +356,8 @@ export function VisionCard(props: VisionCardProps) {
               index,
               row,
               drag,
-              collapsed: collapsed.has(row.id),
-              toggleCollapsed: () => { toggleOne(row.id) },
+              collapsed: rowCollapsed(index, row.id),
+              toggleCollapsed: () => { toggleOne(index, row.id) },
             })}
             {index < state.rows.length - 1
               ? (
@@ -372,7 +376,7 @@ export function VisionCard(props: VisionCardProps) {
         {state.rows.length > 0
           ? (
             <button type="button" className={css.reset}
-              onClick={() => { setCollapsed(allCollapsed ? new Set() : new Set(state.rows.map(row => row.id))) }}
+              onClick={() => { setAllCollapsed(!allCollapsed) }}
             >{allCollapsed ? t('visionExpandAll') : t('visionCollapseAll')}</button>
           )
           : null}
