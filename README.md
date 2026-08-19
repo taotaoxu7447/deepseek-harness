@@ -12,6 +12,32 @@ DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. *
 
 ## Run
 
+### Run this checkout
+
+This fork ships a one-command bootstrap so `dsh` uses the local tree (vision plugin, custom-model effort, and the shipped PLN provider). Secrets stay in `~/.dsh/.credentials.yaml` and are never committed.
+
+```sh
+git clone https://github.com/taotaoxu7447/deepseek-harness.git
+cd deepseek-harness
+./scripts/setup.sh
+```
+
+Then, from any directory:
+
+```sh
+dsh web
+dsh app
+dsh --help
+```
+
+Fill `~/.dsh/.credentials.yaml` (`DEEPSEEK_API_KEY`, `DEEPSEEK_PLN_API_KEY`) once. Later updates:
+
+```sh
+./scripts/setup.sh --update
+```
+
+Team defaults (provider route, default model, effort levels) live in [`deploy/defaults.patch.yml`](deploy/defaults.patch.yml) and apply on every `dsh` boot. Edit that file in git to change what every clone gets; do not put API keys there.
+
 ### Run from `npm`
 
 Install `Node.js`, then run:
@@ -20,14 +46,14 @@ Install `Node.js`, then run:
 npx @deepseek-ai/dsh web
 ```
 
-The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md).
+The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md). The published npm package does not include this fork's vision plugin or custom PLN route.
 
 ### Run from source
 
-To run from a repository checkout:
+To run from a repository checkout without the bootstrap:
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
+git clone https://github.com/taotaoxu7447/deepseek-harness.git
 cd deepseek-harness
 pnpm install
 pnpm run build

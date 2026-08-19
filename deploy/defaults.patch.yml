@@ -1,0 +1,29 @@
+# Shipped composition defaults for this checkout. `scripts/linux-app/dsh` and
+# `scripts/setup.sh` apply this overlay on every boot (`dsh --patch` this file).
+# Secrets stay in `$DSH_HOME/.credentials.yaml` (see credentials.example.yaml).
+# A later user settings.yaml field still wins over the matching composition field.
+#
+# A patch replaces the targeted row's whole `config`. Keep each block complete.
+
+- id: llm-pi-ai
+  config:
+    providers:
+      deepseek-pln:
+        displayName: DeepSeek PLN
+        apiKeyEnv: DEEPSEEK_PLN_API_KEY
+        api: openai-completions
+        baseURL: https://64.90.8.184:9445/v1
+        models:
+          - id: deepseek-v4-flash-0731
+            name: deepseek-v4-flash
+            contextWindow: 256000
+            maxTokens: 32000
+            reasoningEfforts:
+              off: null
+              high: high
+              max: max
+
+- id: agent-default-model
+  config:
+    provider: deepseek-pln
+    model: deepseek-v4-flash-0731
