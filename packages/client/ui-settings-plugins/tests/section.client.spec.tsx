@@ -450,6 +450,7 @@ describe('VisionCard', () => {
       rows,
       rowNumbers,
       rowKeys: rows.map(() => ''),
+      rowConfigured: rows.map(row => (row.model ?? '').trim() !== ''),
       canAdd: true,
       attempts: '',
       probes: rows.map(() => ({ probing: false, models: [] })),
@@ -668,6 +669,30 @@ describe('VisionCard', () => {
     expect(dataTransfer.setData).not.toHaveBeenCalled()
   })
 
+  it('collapses configured rows by default and keeps unconfigured ones open', () => {
+    renderVision(
+      [{ id: 'saved', model: 'm1' }, { id: 'fresh' }],
+      [
+        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+      ],
+    )
+    // The stored, filled row renders as its head only; the blank row stays open.
+    expect(screen.getAllByRole('textbox', { name: en.visionBaseUrl })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: en.visionExpand })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.visionCollapse })).toBeTruthy()
+
+    // An explicit toggle beats the default, and expand-all opens both.
+    fireEvent.click(screen.getByRole('button', { name: en.visionExpand }))
+    expect(screen.getAllByRole('textbox', { name: en.visionBaseUrl })).toHaveLength(2)
+    fireEvent.click(screen.getAllByRole('button', { name: en.visionCollapse })[0]!)
+    expect(screen.getAllByRole('textbox', { name: en.visionBaseUrl })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: en.visionCollapseAll }))
+    expect(screen.queryByRole('textbox', { name: en.visionBaseUrl })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.visionExpandAll }))
+    expect(screen.getAllByRole('textbox', { name: en.visionBaseUrl })).toHaveLength(2)
+  })
+
   it('collapses one row to its head and expands it again', () => {
     renderVision(
       [{ id: 'a' }, { id: 'b' }],
@@ -740,6 +765,9 @@ describe('VisionCard chain editing', () => {
       canAdd: true,
       attempts: '2',
       rowKeys: ['', ''],
+      // Both rows forced expanded: this test drives body controls positionally;
+      // the collapse default itself is covered by its own test.
+      rowConfigured: [false, false],
       probes: [
         { probing: false, models: [{ id: 'm1' }, { id: 'm2', name: 'Second model' }] },
         { probing: false, models: [] },
