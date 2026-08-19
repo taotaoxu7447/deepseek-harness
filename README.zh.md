@@ -12,6 +12,32 @@ DeepSeek Harness 目前处于 _开发者预览_ 阶段，正在快速迭代。**
 
 ## 运行
 
+### 运行本检出目录
+
+本 fork 提供一条命令完成引导，使 `dsh` 使用本地源码树（vision 插件、自定义模型 effort，以及随仓库分发的 PLN 提供方）。密钥只放在 `~/.dsh/.credentials.yaml`，永不提交。
+
+```sh
+git clone https://github.com/taotaoxu7447/deepseek-harness.git
+cd deepseek-harness
+./scripts/setup.sh
+```
+
+然后可在任意目录运行：
+
+```sh
+dsh web
+dsh app
+dsh --help
+```
+
+把 `~/.dsh/.credentials.yaml` 里的 `DEEPSEEK_API_KEY` 和 `DEEPSEEK_PLN_API_KEY` 填一次即可。之后更新：
+
+```sh
+./scripts/setup.sh --update
+```
+
+团队默认值（提供方路由、默认模型、effort 档位）在 [`deploy/defaults.patch.yml`](deploy/defaults.patch.yml)，每次 `dsh` 启动都会应用。要改所有 clone 拿到的默认值，请改这个文件并提交；不要把 API 密钥写进去。
+
 ### 通过 `npm` 运行
 
 安装 `Node.js`，然后运行：
@@ -20,14 +46,14 @@ DeepSeek Harness 目前处于 _开发者预览_ 阶段，正在快速迭代。**
 npx @deepseek-ai/dsh web
 ```
 
-该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.md)。
+该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.md)。已发布的 npm 包不包含本 fork 的 vision 插件或自定义 PLN 路由。
 
 ### 从源码运行
 
-如需从仓库源码运行：
+如需从仓库源码运行、且不使用引导脚本：
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
+git clone https://github.com/taotaoxu7447/deepseek-harness.git
 cd deepseek-harness
 pnpm install
 pnpm run build

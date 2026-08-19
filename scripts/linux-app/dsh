@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Terminal `dsh` for this repository checkout. The invoking directory stays the
+# default workspace; the CLI and plugins load from the checkout so vision and
+# custom-model effort match `pnpm dsh` in the tree. `dsh app` opens the native
+# desktop window on Linux.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+export PATH="${HOME}/bin:${HOME}/.local/bin:${PATH}"
+
+resolve_checkout() {
+  if [[ -n "${DSH_CHECKOUT:-}" ]]; then
+    printf '%s\n' "$DSH_CHECKOUT"
+    return 0
+  fi
+  if [[ -f "$HERE/../../pnpm-workspace.yaml" ]]; then
+    (cd "$HERE/../.." && pwd)
+    return 0
+  fi
+  if [[ -f "$HERE/checkout.path" ]]; then
+    cat "$HERE/checkout.path"
+    return 0
+  fi
+  if [[ -f "${HOME}/.local/share/deepseek-harness/checkout.path" ]]; then
+    cat "${HOME}/.local/share/deepseek-harness/checkout.path"
+    return 0
+  fi
+  return 1
+}
+
+if ! CHECKOUT="$(resolve_checkout)"; then
+  echo "dsh: no DeepSeek Harness checkout (set DSH_CHECKOUT or run ./scripts/setup.sh)" >&2
+  exit 1
+fi
+
+if [[ "${1:-}" == app ]]; then
+  shift
+  DESKTOP="${HOME}/.local/bin/deepseek-harness"
+  if [[ -x "$DESKTOP" ]]; then
+    exec "$DESKTOP" "$@"
+  fi
+  echo "dsh: desktop shell is not installed. On Linux run: ${CHECKOUT}/scripts/linux-app/build.sh" >&2
+  exit 1
+fi
+
+BIN_JS="${CHECKOUT}/apps/cli/lib/bin.js"
+SRC="${CHECKOUT}/apps/cli/src/bin.ts"
+TSX="${CHECKOUT}/node_modules/tsx/dist/esm/index.mjs"
+PATCH="${CHECKOUT}/deploy/defaults.patch.yml"
+
+# `web` is a commander subcommand and rejects parent `--patch`. Rewrite it to
+# `--profile web` so the shipped overlay can ride the launcher flags.
+args=("$@")
+if [[ ${#args[@]} -gt 0 && ${args[0]} == web ]]; then
+  args=(--profile web "${args[@]:1}")
+fi
+if [[ -f "$PATCH" && ${#args[@]} -gt 0 && ${args[0]} != plugin ]]; then
+  args=(--patch "$PATCH" "${args[@]}")
+fi
+
+if [[ -f "$BIN_JS" ]]; then
+  exec node "$BIN_JS" "${args[@]}"
+fi
+if [[ -f "$SRC" && -f "$TSX" ]]; then
+  exec node --import "file://${TSX}" "$SRC" "${args[@]}"
+fi
+
+echo "dsh: checkout is not built. Run: ${CHECKOUT}/scripts/setup.sh" >&2
+exit 1

@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Start the DeepSeek Harness Web UI on 127.0.0.1:3080 when it is not already up.
+# Runs in a new session so quitting the desktop shell never stops the backend.
+# Prefers a built repository checkout (this fork's vision/effort UI) over the
+# published npm package, which does not include those plugins.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+export PATH="${HOME}/bin:${HOME}/.local/bin:${PATH}"
+
+URL="http://127.0.0.1:3080/"
+LOG_DIR="${HOME}/.dsh"
+LOG="${LOG_DIR}/serve.log"
+
+already_up() {
+  python3 - "$URL" <<'PY'
+import sys
+import urllib.error
+import urllib.request
+
+url = sys.argv[1]
+try:
+    with urllib.request.urlopen(url, timeout=2) as response:
+        sys.exit(0 if response.status == 200 else 1)
+except (OSError, urllib.error.URLError, ValueError):
+    sys.exit(1)
+PY
+}
+
+wait_until_up() {
+  local remaining="${1:-90}"
+  while (( remaining > 0 )); do
+    if already_up; then
+      return 0
+    fi
+    sleep 1
+    remaining=$((remaining - 1))
+  done
+  return 1
+}
+
+mkdir -p "$LOG_DIR"
+exec 9>"${LOG_DIR}/serve.lock"
+if ! flock -n 9; then
+  wait_until_up 90
+  exit $?
+fi
+
+if already_up; then
+  exit 0
+fi
+
+resolve_checkout() {
+  if [[ -n "${DSH_CHECKOUT:-}" ]]; then
+    printf '%s\n' "$DSH_CHECKOUT"
+    return 0
+  fi
+  if [[ -f "$HERE/../../pnpm-workspace.yaml" ]]; then
+    (cd "$HERE/../.." && pwd)
+    return 0
+  fi
+  if [[ -f "$HERE/checkout.path" ]]; then
+    cat "$HERE/checkout.path"
+    return 0
+  fi
+  return 1
+}
+
+if [[ -n "${DSH_SERVE_CMD:-}" ]]; then
+  CMD=${DSH_SERVE_CMD}
+elif CHECKOUT="$(resolve_checkout)" && [[ -f "$CHECKOUT/package.json" && -d "$CHECKOUT/node_modules" ]] && command -v pnpm >/dev/null 2>&1; then
+  PATCH="${CHECKOUT}/deploy/defaults.patch.yml"
+  if [[ -f "$PATCH" ]]; then
+    CMD="cd $(printf '%q' "$CHECKOUT") && pnpm dsh --patch $(printf '%q' "$PATCH") --profile web"
+  else
+    CMD="cd $(printf '%q' "$CHECKOUT") && pnpm dsh web"
+  fi
+elif command -v dsh >/dev/null 2>&1; then
+  CMD="dsh web"
+elif command -v npx >/dev/null 2>&1; then
+  CMD="npx --yes @deepseek-ai/dsh web"
+else
+  echo "dsh-serve: install Node.js and either a built checkout (pnpm dsh web), dsh, or npx, or set DSH_SERVE_CMD" >&2
+  exit 1
+fi
+
+cd "$HOME"
+# setsid + nohup: the web server must outlive the GTK process that spawned us.
+nohup setsid bash -lc "$CMD" >>"$LOG" 2>&1 < /dev/null &
+disown || true
+if wait_until_up 90; then
+  exit 0
+fi
+echo "dsh-serve: ${URL} did not become ready; see ${LOG}" >&2
+exit 1
