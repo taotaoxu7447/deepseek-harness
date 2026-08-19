@@ -18,19 +18,25 @@ export type EffortLevel = (typeof EFFORT_LEVELS)[number]
 /** The parsed declaration: undefined inherits, false disables, a dict declares level→wire. */
 export type ReasoningEffortsValue = false | Partial<Record<EffortLevel, string | null>> | undefined
 
-/** One vendor preset: a display id and the levels it offers (wire equals each level; `off` rides bare). */
+/** One vendor preset: a display id and the field entries it fills. */
 export interface EffortPreset {
-  /** Stable id the preset select carries. */
+  /** Stable id the preset button carries. */
   id: string
-  /** Levels the preset declares, in display order. */
-  levels: readonly EffortLevel[]
+  /**
+   * Entries exactly as the field spells them, in display order: a bare level
+   * sends itself on the wire (bare `off` sends nothing), and `level=wire`
+   * renames what is sent — OpenAI's "reasoning off" is the literal `none`,
+   * so its preset must spell `off=none` rather than ride bare.
+   */
+  entries: readonly string[]
 }
 
-/** Common vendor spellings, mirroring the vision chain's preset idea. */
+/** Common vendor spellings, mirroring each vendor's current documented enum. */
 export const EFFORT_PRESETS: readonly EffortPreset[] = [
-  { id: 'deepseek-v4', levels: ['off', 'high', 'max'] },
-  { id: 'openai-grades', levels: ['minimal', 'low', 'medium', 'high'] },
-  { id: 'all-levels', levels: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'deepseek-v4', entries: ['off', 'high', 'max'] },
+  { id: 'openai-grades', entries: ['off=none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'anthropic-claude', entries: ['off', 'low', 'medium', 'high', 'xhigh', 'max'] },
+  { id: 'all-levels', entries: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] },
 ]
 
 /**
@@ -98,5 +104,5 @@ export function parseReasoningEfforts(text: string): ReasoningEffortsParse {
  * @returns the field text for the preset's levels.
  */
 export function effortPresetText(preset: EffortPreset): string {
-  return preset.levels.join(', ')
+  return preset.entries.join(', ')
 }

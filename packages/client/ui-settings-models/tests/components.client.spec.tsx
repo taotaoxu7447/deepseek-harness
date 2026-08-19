@@ -909,9 +909,8 @@ describe('ModelsSection', () => {
     // Empty text inherits: no reasoningEfforts key rides the draft.
     expect(efforts.value).toBe('')
 
-    // The DeepSeek V4 preset fills the mapping in one pick.
-    const preset = screen.getByLabelText<HTMLSelectElement>(`${en.modelEffortPreset} 1`)
-    fireEvent.change(preset, { target: { value: 'deepseek-v4' } })
+    // The DeepSeek V4 preset fills the mapping in one click.
+    fireEvent.click(screen.getByRole('button', { name: en['effortPreset.deepseek-v4'] }))
     expect(efforts.value).toBe('off, high, max')
 
     // An explicit wire spelling round-trips; a level beyond off cannot go wireless.
@@ -930,6 +929,43 @@ describe('ModelsSection', () => {
     expect(op.value).toEqual([
       { id: 'local-flash', reasoningEfforts: { off: null, high: 'high', max: 'ultra' } },
     ])
+  })
+
+  it('toggles reasoning effort levels through the level chips', async () => {
+    await mountSection()
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    fireEvent.click(screen.getByText(en.customized))
+    fireEvent.click(screen.getByText(en.addModel))
+    expandRow(1)
+    const efforts = screen.getByLabelText<HTMLInputElement>(`${en.modelReasoningEfforts} 1`)
+    const chip = (level: string): HTMLElement =>
+      screen.getByRole('button', { name: `${en.modelReasoningEfforts} 1 ${level}` })
+
+    // Chips switch levels on in canonical escalation order, off riding bare.
+    fireEvent.click(chip('max'))
+    expect(efforts.value).toBe('max')
+    fireEvent.click(chip('off'))
+    expect(efforts.value).toBe('off, max')
+    expect(chip('max').getAttribute('aria-pressed')).toBe('true')
+    expect(chip('low').getAttribute('aria-pressed')).toBe('false')
+
+    // A wire rename from the text field keeps the chip pressed.
+    fireEvent.change(efforts, { target: { value: 'off, max=ultra' } })
+    expect(chip('max').getAttribute('aria-pressed')).toBe('true')
+
+    // Switching the last thinking level off drops off too: empty inherits.
+    fireEvent.click(chip('max'))
+    expect(efforts.value).toBe('')
+    expect(chip('off').getAttribute('aria-pressed')).toBe('false')
+
+    // `false` and unreadable text press nothing; a chip then starts afresh.
+    fireEvent.change(efforts, { target: { value: 'false' } })
+    expect(chip('high').getAttribute('aria-pressed')).toBe('false')
+    fireEvent.change(efforts, { target: { value: 'off, high=' } })
+    expect(chip('high').getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(chip('low'))
+    expect(efforts.value).toBe('low')
+    expect(efforts.getAttribute('aria-invalid')).toBeNull()
   })
 
   it('adds a dormant provider with a derived reference and stores its key', async () => {

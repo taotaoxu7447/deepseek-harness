@@ -53,9 +53,13 @@ describe('parseReasoningEfforts', () => {
 })
 
 describe('EFFORT_PRESETS', () => {
-  it('covers the three vendor spellings the Models page offers', () => {
-    expect(EFFORT_PRESETS.map(preset => preset.id)).toEqual(['deepseek-v4', 'openai-grades', 'all-levels'])
+  it('covers the vendor spellings the Models page offers', () => {
+    expect(EFFORT_PRESETS.map(preset => preset.id)).toEqual(['deepseek-v4', 'openai-grades', 'anthropic-claude', 'all-levels'])
     expect(effortPresetText(EFFORT_PRESETS[0]!)).toBe('off, high, max')
-    expect(effortPresetText(EFFORT_PRESETS[1]!)).toBe('minimal, low, medium, high')
+    // OpenAI names its lowest rung `none`: the preset renames off rather than
+    // omitting the parameter, which would fall back to the provider default.
+    expect(effortPresetText(EFFORT_PRESETS[1]!)).toBe('off=none, minimal, low, medium, high, xhigh, max')
+    // Anthropic's output_config.effort enum has no minimal and no none.
+    expect(effortPresetText(EFFORT_PRESETS[2]!)).toBe('off, low, medium, high, xhigh, max')
   })
 })
