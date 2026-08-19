@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import VisionRuntime from '@deepseek-ai/dsh-vision'
+import VisionRuntime, { VisionError } from '@deepseek-ai/dsh-vision'
 import * as qwenPlugin from '@deepseek-ai/dsh-vision-qwen'
 import {
   anthropicEffortFragment,
@@ -216,6 +216,71 @@ describe('chain priority and fallback', () => {
     )).describe({ image })
 
     expect(calls).toEqual(['primary', 'primary', 'primary', 'fallback'])
+  })
+
+  it('falls at once on a credential cooldown instead of spending the attempt budget', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url.includes('://fallback.') ? 'fallback' : 'primary')
+      if (url.includes('://fallback.')) return jsonResponse({ choices: [{ message: { content: 'from fallback' } }] })
+      return jsonResponse({ error: 'All credentials for model x are cooling down' }, { status: 429 })
+    }))
+
+    const description = await new QwenVisionProvider(() => chain([
+      backend({ id: 'primary', baseURL: 'https://primary.test/v1' }),
+      backend({ id: 'fallback', baseURL: 'https://fallback.test/v1' }),
+    ], { attemptsPerBackend: 3 })).describe({ image })
+
+    expect(description.text).toBe('from fallback')
+    expect(calls).toEqual(['primary', 'fallback'])
+  })
+
+  it('falls at once on a deterministic 4xx refusal', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url.includes('://fallback.') ? 'fallback' : 'primary')
+      if (url.includes('://fallback.')) return jsonResponse({ choices: [{ message: { content: 'from fallback' } }] })
+      return jsonResponse({ error: 'No endpoints found that support image input' }, { status: 400 })
+    }))
+
+    const description = await new QwenVisionProvider(() => chain([
+      backend({ id: 'primary', baseURL: 'https://primary.test/v1' }),
+      backend({ id: 'fallback', baseURL: 'https://fallback.test/v1' }),
+    ])).describe({ image })
+
+    expect(description.text).toBe('from fallback')
+    expect(calls).toEqual(['primary', 'fallback'])
+  })
+
+  it('still spends the budget on a 408 request timeout', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(url.includes('://fallback.') ? 'fallback' : 'primary')
+      if (url.includes('://fallback.')) return jsonResponse({ choices: [{ message: { content: 'from fallback' } }] })
+      return jsonResponse({ error: 'too slow' }, { status: 408 })
+    }))
+
+    const description = await new QwenVisionProvider(() => chain([
+      backend({ id: 'primary', baseURL: 'https://primary.test/v1' }),
+      backend({ id: 'fallback', baseURL: 'https://fallback.test/v1' }),
+    ])).describe({ image })
+
+    expect(description.text).toBe('from fallback')
+    expect(calls).toEqual(['primary', 'primary', 'fallback'])
+  })
+
+  it('lists one attempt per backend when every failure is deterministic', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'bad key' }, { status: 401 })))
+
+    const failure: unknown = await new QwenVisionProvider(() => chain([
+      backend({ id: 'primary', baseURL: 'https://primary.test/v1' }),
+      backend({ id: 'fallback', baseURL: 'https://fallback.test/v1' }),
+    ])).describe({ image }).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(VisionError)
+    expect(String(failure)).toContain('primary (attempt 1/2)')
+    expect(String(failure)).toContain('fallback (attempt 1/2)')
+    expect(String(failure)).not.toContain('attempt 2/2')
   })
 
   it('lists every failed attempt when the whole chain fails', async () => {
