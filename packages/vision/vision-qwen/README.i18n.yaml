@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/vision/vision-qwen/README.md
-README.md: c738c7703404b0c145e22d15b133982d61dc9b6d
-README.zh.md: 59306b2f2161cde7f0bf70150225ee006293d41c
+README.md: 0818cbaa022a86887f03e3dba145fb74eb47eabb
+README.zh.md: e8d12bf1d5c35fae6bf3f26860e12b88a3dab30f
