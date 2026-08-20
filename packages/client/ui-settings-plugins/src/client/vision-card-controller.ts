@@ -5,10 +5,10 @@
  * writes the whole chain; the probe button answers both "is this endpoint
  * reachable with this key" and "which model ids does it serve" through the
  * vision-discovery domain, so a backend is configured without hand-copying a
- * model id. Per-row effort, context, and input-limit fields ride the same
- * section; the Host's section validator rejects contradictory combinations
- * (an effort preset its protocol cannot carry, a budget over the context
- * window) at save.
+ * model id. Per-row effort and context fields plus the chain's output budget
+ * ride the same section; the Host's section validator rejects contradictory
+ * combinations (an effort preset its protocol cannot carry, a budget over the
+ * context window) at save.
  */
 
 import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
@@ -37,7 +37,7 @@ export type VisionEffortPreset = 'openai' | 'mimo' | 'qwen-local' | 'anthropic'
 export type VisionEffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high'
 
 /** Per-row numeric fields staged as free text until save parses them. */
-export type VisionRowNumberField = 'thinkingBudget' | 'contextTokens' | 'maxInputTokens'
+export type VisionRowNumberField = 'thinkingBudget' | 'contextTokens'
 
 /**
  * Credential reference a row uses when its draft names none.
@@ -61,6 +61,11 @@ export interface VisionBackendRow {
   effortEnabled?: boolean
   thinkingBudget?: number
   contextTokens?: number
+  /**
+   * Estimated-input guard; the card no longer edits it (the chain output
+   * budget took its slot), and a card save rewrites the row without it — it
+   * survives only as hand-written YAML.
+   */
   maxInputTokens?: number
 }
 
@@ -68,6 +73,7 @@ export interface VisionBackendRow {
 export interface VisionSettings {
   backends?: VisionBackendRow[]
   attemptsPerBackend?: number
+  maxTokens?: number
 }
 
 /** One row's numeric drafts, staged as text so a half-typed value never rewrites itself. */
@@ -76,8 +82,6 @@ export interface RowNumberDrafts {
   thinkingBudget: string
   /** Advertised context window (tokens). */
   contextTokens: string
-  /** Estimated-input guard (tokens). */
-  maxInputTokens: string
 }
 
 /** One backend's credential state as the credentials domain last reported. */
@@ -124,6 +128,8 @@ export interface VisionCardState {
   canAdd: boolean
   /** The staged attempts-per-backend draft. */
   attempts: string
+  /** The staged chain output-budget (tokens) draft. */
+  maxTokens: string
   /** Per-row probe state, indexed with `rows`. */
   probes: readonly RowProbeState[]
   /** Per-row credential state, indexed with `rows`. */
@@ -150,6 +156,8 @@ export interface VisionCardFace {
   addRow: () => void
   /** Stage the attempts-per-backend draft. */
   editAttempts: (value: string) => void
+  /** Stage the chain output-budget (tokens) draft. */
+  editMaxTokens: (value: string) => void
   /** Stage one row's API key literal; it is written through the credentials domain on save. */
   editRowKey: (index: number, value: string) => void
   /** Probe one row's endpoint for reachability and its model listing. */
@@ -162,7 +170,7 @@ export interface VisionCardFace {
 
 /** Blank row-number drafts for one newly staged row. */
 function blankRowNumbers(): RowNumberDrafts {
-  return { thinkingBudget: '', contextTokens: '', maxInputTokens: '' }
+  return { thinkingBudget: '', contextTokens: '' }
 }
 
 /**
@@ -243,6 +251,7 @@ export class VisionCardController {
   private readonly store: SnapshotStore<VisionCardState>
   private entries: RowEntry[] = []
   private attempts = ''
+  private maxTokens = ''
   private credentials: RowCredentialState[] = []
   private dirty = false
   private saving = false
@@ -285,12 +294,12 @@ export class VisionCardController {
       numbers: {
         thinkingBudget: row.thinkingBudget !== undefined ? String(row.thinkingBudget) : '',
         contextTokens: row.contextTokens !== undefined ? String(row.contextTokens) : '',
-        maxInputTokens: row.maxInputTokens !== undefined ? String(row.maxInputTokens) : '',
       },
       probe: { probing: false, models: [] },
       configured: (row.model ?? '').trim() !== '',
     }))
     this.attempts = section?.attemptsPerBackend !== undefined ? String(section.attemptsPerBackend) : ''
+    this.maxTokens = section?.maxTokens !== undefined ? String(section.maxTokens) : ''
     this.dirty = false
     this.failed = false
     this.store.set(this.projection())
@@ -310,6 +319,7 @@ export class VisionCardController {
       rowConfigured: this.entries.map(entry => entry.configured),
       canAdd: this.entries.length < VISION_MAX_BACKENDS,
       attempts: this.attempts,
+      maxTokens: this.maxTokens,
       probes: this.entries.map(entry => entry.probe),
       credentials: this.credentials,
     }
@@ -362,6 +372,10 @@ export class VisionCardController {
       },
       editAttempts: (value) => {
         this.attempts = value
+        this.markDirty()
+      },
+      editMaxTokens: (value) => {
+        this.maxTokens = value
         this.markDirty()
       },
       editRowKey: (index, value) => {
@@ -454,18 +468,19 @@ export class VisionCardController {
       const staged = this.entries.map((entry) => {
         const thinkingBudget = parseRowNumber(entry.numbers.thinkingBudget)
         const contextTokens = parseRowNumber(entry.numbers.contextTokens)
-        const maxInputTokens = parseRowNumber(entry.numbers.maxInputTokens)
         return {
           row: {
             ...entry.row,
             ...thinkingBudget === undefined ? {} : { thinkingBudget },
             ...contextTokens === undefined ? {} : { contextTokens },
-            ...maxInputTokens === undefined ? {} : { maxInputTokens },
           },
           key: entry.key.trim(),
         }
       })
       const stagedAttempts = this.attempts.trim()
+      // Chain drafts parse up front too: a bad draft must fail the save before
+      // any write leaves, never after `backends` has already landed.
+      const stagedMaxTokens = parseRowNumber(this.maxTokens)
       await this.scope.set('backends', staged.map(entry => entry.row))
       const attempts = Number(stagedAttempts)
       if (stagedAttempts !== '' && Number.isFinite(attempts)) {
@@ -473,6 +488,9 @@ export class VisionCardController {
       } else {
         await this.scope.unset('attemptsPerBackend')
       }
+      const maxTokens = stagedMaxTokens
+      if (maxTokens === undefined) await this.scope.unset('maxTokens')
+      else await this.scope.set('maxTokens', maxTokens)
       for (const { row, key } of staged) {
         if (key.length === 0) continue
         const apiKeyEnv = row.apiKeyEnv !== undefined && row.apiKeyEnv.length > 0

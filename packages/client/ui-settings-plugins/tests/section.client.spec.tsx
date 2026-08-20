@@ -431,6 +431,7 @@ function visionFace() {
     removeRow: vi.fn(),
     addRow: vi.fn(),
     editAttempts: vi.fn(),
+    editMaxTokens: vi.fn(),
     editRowKey: vi.fn(),
     probe: vi.fn(),
     save: vi.fn(),
@@ -453,6 +454,7 @@ describe('VisionCard', () => {
       rowConfigured: rows.map(row => (row.model ?? '').trim() !== ''),
       canAdd: true,
       attempts: '',
+      maxTokens: '',
       probes: rows.map(() => ({ probing: false, models: [] })),
       credentials: rows.map(row => ({ ref: `VISION_${row.id.toUpperCase()}_API_KEY`, configured: false })),
       ...state,
@@ -467,7 +469,7 @@ describe('VisionCard', () => {
   it('stages protocol and openai effort-level edits through the face', () => {
     const face = renderVision(
       [{ id: 'gpt', baseURL: 'https://gpt.test/v1', effortPreset: 'openai' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     fireEvent.change(screen.getByLabelText(en.visionProtocol), { target: { value: 'openai-responses' } })
@@ -484,7 +486,7 @@ describe('VisionCard', () => {
   it('stages the staged effort level the openai preset carries', () => {
     renderVision(
       [{ id: 'gpt', baseURL: 'https://gpt.test/v1', effortPreset: 'openai', effortLevel: 'low' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     expect(screen.getByLabelText(en.visionEffortLevel)).toHaveProperty('value', 'low')
@@ -514,8 +516,8 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'down', baseURL: 'https://down.test/v1' }, { id: 'busy', baseURL: 'https://busy.test/v1' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
       {
         probes: [
@@ -533,7 +535,7 @@ describe('VisionCard', () => {
   it('offers the advertised models once a probe lists more than one', () => {
     renderVision(
       [{ id: 'multi', baseURL: 'https://multi.test/v1' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
       { probes: [{ probing: false, models: [{ id: 'm1' }, { id: 'm2' }] }] },
     )
 
@@ -545,7 +547,7 @@ describe('VisionCard', () => {
   it('shows the off/on toggle alone for the mimo preset', () => {
     const face = renderVision(
       [{ id: 'mimo', baseURL: 'https://mimo.test', effortPreset: 'mimo' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     expect(screen.queryByLabelText(en.visionEffortLevel)).toBeNull()
@@ -555,28 +557,26 @@ describe('VisionCard', () => {
     expect(face.editRow).toHaveBeenCalledWith(0, 'effortEnabled', true)
   })
 
-  it('pairs the toggle with a budget for qwen-local, and stages context and input limits', () => {
+  it('pairs the toggle with a budget for qwen-local, and stages the context window', () => {
     const face = renderVision(
       [{ id: 'local', baseURL: 'http://localhost:8000/v1', effortPreset: 'qwen-local' }],
-      [{ thinkingBudget: '512', contextTokens: '32768', maxInputTokens: '' }],
+      [{ thinkingBudget: '512', contextTokens: '32768' }],
     )
 
     expect(screen.getByLabelText(en.visionThinkingBudget)).toHaveProperty('value', '512')
     fireEvent.change(screen.getByLabelText(en.visionThinkingBudget), { target: { value: '1024' } })
     fireEvent.change(screen.getByLabelText(en.visionContextTokens), { target: { value: '131072' } })
-    fireEvent.change(screen.getByLabelText(en.visionMaxInputTokens), { target: { value: '100000' } })
 
     expect(face.editRowNumber.mock.calls).toEqual([
       [0, 'thinkingBudget', '1024'],
       [0, 'contextTokens', '131072'],
-      [0, 'maxInputTokens', '100000'],
     ])
   })
 
   it('pairs the toggle with a budget for the anthropic preset', () => {
     renderVision(
       [{ id: 'claude', baseURL: 'https://anthropic.test', effortPreset: 'anthropic', effortEnabled: true }],
-      [{ thinkingBudget: '2048', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '2048', contextTokens: '' }],
     )
 
     expect(screen.getByLabelText(en.visionEffortEnabled)).toHaveProperty('checked', true)
@@ -586,7 +586,7 @@ describe('VisionCard', () => {
   it('renders no effort control without a preset', () => {
     renderVision(
       [{ id: 'plain', baseURL: 'https://qwen.test/v1' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     expect(screen.getByLabelText(en.visionEffortPreset)).toHaveProperty('value', '')
@@ -602,9 +602,9 @@ describe('VisionCard', () => {
         { id: 'gpt', baseURL: 'https://gpt.test/v1', protocol: 'openai-responses' },
       ],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
       { attempts: '3' },
     )
@@ -625,9 +625,9 @@ describe('VisionCard', () => {
     const face = renderVision(
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
     const handles = screen.getAllByRole('button', { name: en.visionDragHandle })
@@ -658,7 +658,7 @@ describe('VisionCard', () => {
   it('disables the drag handle when the card is read-only', () => {
     renderVision(
       [{ id: 'a' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
       { writable: false },
     )
     const handle = screen.getByRole('button', { name: en.visionDragHandle })
@@ -673,8 +673,8 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'saved', model: 'm1' }, { id: 'fresh' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
     // The stored, filled row renders as its head only; the blank row stays open.
@@ -697,8 +697,8 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'a' }, { id: 'b' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
     expect(screen.getAllByRole('textbox', { name: en.visionBaseUrl })).toHaveLength(2)
@@ -714,9 +714,9 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
 
@@ -737,7 +737,7 @@ describe('VisionCard', () => {
   it('echoes the staged key as dots and marks it staged until the save lands', () => {
     renderVision(
       [{ id: 'a' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
       { rowKeys: ['sk-staged'] },
     )
 
@@ -759,11 +759,12 @@ describe('VisionCard chain editing', () => {
       dirty: true,
       rows,
       rowNumbers: [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
       canAdd: true,
       attempts: '2',
+      maxTokens: '',
       rowKeys: ['', ''],
       // Both rows forced expanded: this test drives body controls positionally;
       // the collapse default itself is covered by its own test.
@@ -813,10 +814,12 @@ describe('VisionCard chain editing', () => {
     // Chain-wide controls and the footer.
     fireEvent.click(screen.getByRole('button', { name: en.visionAddBackend }))
     fireEvent.change(screen.getByLabelText(en.visionAttempts), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText(en.visionMaxTokens), { target: { value: '4k' } })
     fireEvent.click(screen.getByRole('button', { name: en.discard }))
     fireEvent.click(screen.getByRole('button', { name: en.save }))
     expect(face.addRow).toHaveBeenCalledOnce()
     expect(face.editAttempts).toHaveBeenCalledWith('3')
+    expect(face.editMaxTokens).toHaveBeenCalledWith('4k')
     expect(face.discard).toHaveBeenCalledOnce()
     expect(face.save).toHaveBeenCalledOnce()
   })

@@ -30,7 +30,7 @@ export type PluginsSettingsLocaleKey =
   | 'visionEffortEnabled' | 'visionEffortEnabledHint' | 'visionEffortEnabledMimoHint'
   | 'visionThinkingBudget' | 'visionThinkingBudgetHint'
   | 'visionContextTokens' | 'visionContextTokensHint'
-  | 'visionMaxInputTokens' | 'visionMaxInputTokensHint'
+  | 'visionMaxTokens' | 'visionMaxTokensHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -128,8 +128,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   visionThinkingBudgetHint: 'Token cap on the model\'s thinking; Anthropic requires at least 1024 and below the completion budget. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
   visionContextTokens: 'Context size (tokens)',
   visionContextTokensHint: 'The model\'s advertised context window; saving fails if the completion budget exceeds it. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
-  visionMaxInputTokens: 'Input limit (tokens)',
-  visionMaxInputTokensHint: 'A describe whose estimated input (text plus image) exceeds this is refused before any request is sent. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
+  visionMaxTokens: 'Output limit (tokens)',
+  visionMaxTokensHint: 'The completion budget of one description, sent as max_tokens / max_output_tokens. Blank uses the built-in 1024. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
 }
 
 /** Simplified Chinese copy. */
@@ -228,6 +228,6 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   visionThinkingBudgetHint: '模型思考阶段的 token 上限；Anthropic 要求至少 1024 且低于输出上限。可带 k/m 后缀（×1024/×1024²）。',
   visionContextTokens: '上下文大小（token）',
   visionContextTokensHint: '模型标称的上下文窗口；输出上限超过它时保存会被拒绝。可带 k/m 后缀（×1024/×1024²）。',
-  visionMaxInputTokens: '输入上限（token）',
-  visionMaxInputTokensHint: '估算输入（文本加图片）超过此值的 describe 会在发出请求前被拒绝。可带 k/m 后缀（×1024/×1024²）。',
+  visionMaxTokens: '输出上限（token）',
+  visionMaxTokensHint: '一次描述的最大输出 token 数，作为 max_tokens / max_output_tokens 发送；留空使用内置 1024。可带 k/m 后缀（×1024/×1024²）。',
 }

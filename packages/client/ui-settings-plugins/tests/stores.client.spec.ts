@@ -715,11 +715,15 @@ describe('VisionCardController', () => {
     }
   }
 
-  function section(host: StubSettingsScope<VisionSettings>, rows: VisionSettings['backends'], attempts?: number): void {
+  function section(host: StubSettingsScope<VisionSettings>, rows: VisionSettings['backends'], attempts?: number, maxTokens?: number): void {
     host.publish({
       status: 'ready',
       writable: true,
-      value: { backends: rows, ...attempts === undefined ? {} : { attemptsPerBackend: attempts } } as VisionSettings,
+      value: {
+        backends: rows,
+        ...attempts === undefined ? {} : { attemptsPerBackend: attempts },
+        ...maxTokens === undefined ? {} : { maxTokens },
+      } as VisionSettings,
       base: { backends: rows },
       user: {},
     })
@@ -857,13 +861,13 @@ describe('VisionCardController', () => {
       effortEnabled: true,
       thinkingBudget: 2048,
       contextTokens: 200_000,
-      maxInputTokens: 180_000,
-    }])
+    }], undefined, 4096)
     await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
 
     const state = controller.inject().hooks.visionCard.getSnapshot()
     expect(state.rows[0]).toMatchObject({ protocol: 'anthropic', effortPreset: 'anthropic', effortEnabled: true })
-    expect(state.rowNumbers[0]).toEqual({ thinkingBudget: '2048', contextTokens: '200000', maxInputTokens: '180000' })
+    expect(state.rowNumbers[0]).toEqual({ thinkingBudget: '2048', contextTokens: '200000' })
+    expect(state.maxTokens).toBe('4096')
   })
 
   it('saves parsed numerics, omits blank drafts, and drops keys cleared to empty', async () => {
@@ -894,7 +898,7 @@ describe('VisionCardController', () => {
     })
   })
 
-  it('saves the context and input budgets when staged', async () => {
+  it('saves the context budget when staged', async () => {
     const host = stubSettingsScope<VisionSettings>()
     acceptWrites(host)
     const w = wire()
@@ -904,13 +908,12 @@ describe('VisionCardController', () => {
     const face = controller.inject()
 
     face.editRowNumber(0, 'contextTokens', '131072')
-    face.editRowNumber(0, 'maxInputTokens', '100000')
     face.save()
     await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
 
     const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
     const rows = backendsCall[1] as Record<string, unknown>[]
-    expect(rows[0]).toMatchObject({ contextTokens: 131072, maxInputTokens: 100000 })
+    expect(rows[0]).toMatchObject({ contextTokens: 131072 })
   })
 
   it('expands k/m suffixes on the staged budget drafts', async () => {
@@ -923,14 +926,16 @@ describe('VisionCardController', () => {
     const face = controller.inject()
 
     face.editRowNumber(0, 'contextTokens', '256k')
-    face.editRowNumber(0, 'maxInputTokens', '1.5m')
     face.editRowNumber(0, 'thinkingBudget', '2K')
+    face.editMaxTokens('1.5m')
     face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
+    // Await the chain write, not the backends one: the backends write lands
+    // first, and asserting right after it races the save's continuation.
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('maxTokens', 1_572_864) })
 
     const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
     const rows = backendsCall[1] as Record<string, unknown>[]
-    expect(rows[0]).toMatchObject({ contextTokens: 262_144, maxInputTokens: 1_572_864, thinkingBudget: 2048 })
+    expect(rows[0]).toMatchObject({ contextTokens: 262_144, thinkingBudget: 2048 })
   })
 
   it('fails the save on a non-numeric budget draft and keeps the section untouched', async () => {
@@ -942,7 +947,7 @@ describe('VisionCardController', () => {
     await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
     const face = controller.inject()
 
-    face.editRowNumber(0, 'maxInputTokens', 'not-a-number')
+    face.editMaxTokens('not-a-number')
     face.save()
     await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().failed).toBe(true) })
 
@@ -1241,6 +1246,20 @@ describe('VisionCardController', () => {
     face.editAttempts('abc')
     face.save()
     await vi.waitFor(() => { expect(host.unset).toHaveBeenCalledWith('attemptsPerBackend') })
+  })
+
+  it('unsets the output budget when its staged draft is blanked', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }], undefined, 4096)
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editMaxTokens('')
+    face.save()
+    await vi.waitFor(() => { expect(host.unset).toHaveBeenCalledWith('maxTokens') })
   })
 
   it('re-reads credentials only for a reference some row watches', async () => {

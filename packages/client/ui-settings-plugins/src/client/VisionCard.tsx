@@ -281,7 +281,6 @@ function visionRow(view: VisionRowView): ReactNode {
             : null}
         </div>
         {rowNumberField(view, 'contextTokens', t('visionContextTokens'), t('visionContextTokensHint'))}
-        {rowNumberField(view, 'maxInputTokens', t('visionMaxInputTokens'), t('visionMaxInputTokensHint'))}
       </div>
     </div>
   )
@@ -394,6 +393,20 @@ export function VisionCard(props: VisionCardProps) {
         invalid={false}
         overridden={false}
         onEdit={(text) => { props.editAttempts(text) }}
+      />
+      <ValueField
+        id="vision-max-tokens"
+        label={t('visionMaxTokens')}
+        hint={t('visionMaxTokensHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        disabled={disabled}
+        numeric
+        text={state.maxTokens}
+        invalid={false}
+        overridden={false}
+        onEdit={(text) => { props.editMaxTokens(text) }}
       />
     </PluginCard>
   )
