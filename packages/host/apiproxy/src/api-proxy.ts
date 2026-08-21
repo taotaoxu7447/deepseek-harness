@@ -174,15 +174,6 @@ function pointerReferencesImage(events: readonly SessionEvent[], attachmentId: s
   return false
 }
 
-/** Decode the browser payload while rejecting non-canonical base64 forms. */
-function decodeBase64(data: string): Uint8Array {
-  const decoded = Buffer.from(data, 'base64')
-  if (data.length === 0 || decoded.toString('base64') !== data) {
-    throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
-  }
-  return new Uint8Array(decoded)
-}
-
 /** `anthropic-version` header value for the Messages listing probe; a protocol constant. */
 const ANTHROPIC_MESSAGES_VERSION = '2023-06-01'
 

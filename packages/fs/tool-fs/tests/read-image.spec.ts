@@ -432,6 +432,10 @@ describe('image admission failures', () => {
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
+
+      readImageById(_attachmentId: ImageAttachmentRef['attachmentId']): Promise<StoredImageAttachment> {
+        throw new Error('unreachable in this test')
+      }
     }
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ attachments: false })

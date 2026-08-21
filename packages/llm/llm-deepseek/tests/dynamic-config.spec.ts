@@ -50,6 +50,10 @@ class StaticAttachmentStore extends AttachmentStore {
   readImage(ref: ImageAttachmentRef, _signal?: AbortSignal): Promise<StoredImageAttachment> {
     return Promise.resolve({ ref, data: Uint8Array.of(1, 2, 3) })
   }
+
+  readImageById(_attachmentId: ImageAttachmentRef['attachmentId']): Promise<StoredImageAttachment> {
+    return Promise.resolve({ ref: IMAGE_REF, data: Uint8Array.of(1, 2, 3) })
+  }
 }
 
 const cleanups: Array<() => Promise<void>> = []

@@ -66,6 +66,7 @@ class RestrictedAttachmentStore extends AttachmentStore {
     maxImagesPerMessage: 1,
     maxMessageImageBytes: 2_000_000,
     maxImagePixels: 100_000_000,
+    maxImageDimension: 2000,
   }
 
   async validateImage(_input: SaveImageAttachment): Promise<void> {}
