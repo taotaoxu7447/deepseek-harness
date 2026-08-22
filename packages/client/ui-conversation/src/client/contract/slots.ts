@@ -30,6 +30,14 @@ export interface ComposerAttachment {
   previewUrl: string
 }
 
+/** One dropped item delivered by the native shell with its absolute path. */
+export interface ComposerDroppedPath {
+  /** Absolute path as dropped (the browser drop path never sees these). */
+  path: string
+  /** Directories insert their mention with a trailing slash. */
+  directory: boolean
+}
+
 /** Input state handed to the optional attachment presentation plugin. */
 export interface ComposerAttachmentsOwnerProps {
   /** Browser-owned draft images in input order. */
@@ -38,6 +46,8 @@ export interface ComposerAttachmentsOwnerProps {
   canAcceptDrop: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
+  /** Add native-shell-dropped absolute paths as `@` mentions. */
+  onAddPaths: (paths: readonly ComposerDroppedPath[]) => void
   /** Remove one draft image through the conversation service. */
   onRemoveImage: (id: DraftAttachmentId) => void
   /** Display-ready limits for the drop invitation. */

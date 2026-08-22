@@ -319,6 +319,53 @@ describe('image draft rail', () => {
     expect(attachmentOwner(result.slotCalls).dropLimits).toEqual({ count: 20, size: '5MB' })
   })
 
+  it('appends native-shell dropped paths as @-mentions: slash for folders, quotes for spaces', () => {
+    const result = bench({ draft: '看这个' })
+    act(() => {
+      attachmentOwner(result.slotCalls).onAddPaths([
+        { path: '/tmp/plain', directory: true },
+        { path: '/Users/me/code/my folder', directory: true },
+        { path: '/tmp/notes.txt', directory: false },
+      ])
+    })
+    expect(result.textarea.value).toBe('看这个 @/tmp/plain/ @"/Users/me/code/my folder/ @/tmp/notes.txt ')
+  })
+
+  it('joins onto an empty draft and a whitespace-ended draft without a stray gap', () => {
+    const empty = bench()
+    act(() => { attachmentOwner(empty.slotCalls).onAddPaths([{ path: '/tmp/plain', directory: true }]) })
+    expect(empty.textarea.value).toBe('@/tmp/plain/ ')
+    cleanup()
+    const trailed = bench({ draft: '看这个\n' })
+    act(() => { attachmentOwner(trailed.slotCalls).onAddPaths([{ path: '/tmp/plain', directory: true }]) })
+    expect(trailed.textarea.value).toBe('看这个\n@/tmp/plain/ ')
+  })
+
+  it('refuses path drops while the machine is busy, locked, keyboard-less, or handed nothing usable', () => {
+    // Submitting phase: the sink round-trip holds the pending lock.
+    const busy = bench({ draft: 'hello' })
+    fireEvent.keyDown(busy.textarea, { key: 'Enter' })
+    attachmentOwner(busy.slotCalls).onAddPaths([{ path: '/tmp/plain', directory: true }])
+    expect(busy.textarea.value).toBe('hello')
+    cleanup()
+    // Locked (inert) composer.
+    const inert = bench({ inert: true, draft: 'hello' })
+    attachmentOwner(inert.slotCalls).onAddPaths([{ path: '/tmp/plain', directory: true }])
+    expect(inert.textarea.value).toBe('hello')
+    cleanup()
+    // No machine face at all.
+    const headless = bench({ draft: 'hello' })
+    headless.view.rerender(<InputBar {...headless.props} keyboard={undefined} />)
+    attachmentOwner(headless.slotCalls).onAddPaths([{ path: '/tmp/plain', directory: true }])
+    expect(headless.textarea.value).toBe('hello')
+    cleanup()
+    // Empty batch and an unrepresentable path (control characters) both no-op.
+    const plain = bench({ draft: 'hello' })
+    attachmentOwner(plain.slotCalls).onAddPaths([])
+    attachmentOwner(plain.slotCalls).onAddPaths([{ path: '/tmp/a\u0000b', directory: false }])
+    expect(plain.textarea.value).toBe('hello')
+  })
+
   it('announces server attachment rejections as product copy, other codes as developer text', () => {
     const attachmentError = (reason: string): ConversationSnapshot['promptError'] => ({
       op: 'send',

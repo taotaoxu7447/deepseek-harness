@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -58,6 +58,7 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Composer
     attachments: [],
     canAcceptDrop: true,
     onAddImages: () => {},
+    onAddPaths: () => {},
     onRemoveImage: () => {},
     t,
     ...overrides,
@@ -156,5 +157,115 @@ describe('ComposerAttachments', () => {
     expect(view.getByAltText('待发送图片')).toBeTruthy()
     fireEvent.click(view.getByTitle('查看原图'))
     expect(view.getByAltText('原图')).toBeTruthy()
+  })
+
+  it('answers native-shell drops: image bytes become drafts, paths become mentions', () => {
+    const onAddImages = vi.fn()
+    const onAddPaths = vi.fn()
+    render(<ComposerAttachments {...props({ onAddImages, onAddPaths })} />)
+
+    act(() => {
+      window.__dshNativeDrop?.({
+        mentions: [{ path: '/Users/me/code/folder', directory: true }],
+        images: [{ name: 'shot.png', type: 'image/png', data: btoa('px') }],
+      })
+    })
+    expect(onAddPaths).toHaveBeenCalledWith([{ path: '/Users/me/code/folder', directory: true }])
+    expect(onAddImages).toHaveBeenCalledTimes(1)
+    const files = onAddImages.mock.calls[0]![0] as File[]
+    expect(files[0]!.name).toBe('shot.png')
+    expect(files[0]!.type).toBe('image/png')
+
+    // Sparse payload: no images key at all, empty mentions.
+    act(() => { window.__dshNativeDrop?.({ mentions: [] }) })
+    expect(onAddImages).toHaveBeenCalledTimes(1)
+    expect(onAddPaths).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds native image bytes back while the composer refuses drops', () => {
+    const onAddImages = vi.fn()
+    render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddImages })} />)
+    act(() => {
+      window.__dshNativeDrop?.({ images: [{ name: 'x.png', type: 'image/png', data: btoa('px') }] })
+    })
+    expect(onAddImages).not.toHaveBeenCalled()
+  })
+
+  it('an unmounted receiver never eats a drop meant for its successor', () => {
+    const first = render(<ComposerAttachments {...props()} />)
+    const second = render(<ComposerAttachments {...props()} />)
+    const successor = window.__dshNativeDrop
+    first.unmount()
+    expect(window.__dshNativeDrop).toBe(successor)
+    second.unmount()
+    expect(window.__dshNativeDrop).toBeUndefined()
+  })
+
+  it('attaches the images inside a browser folder drop instead of its empty husk', async () => {
+    const onAddImages = vi.fn()
+    render(<ComposerAttachments {...props({ onAddImages })} />)
+    const inner = new File([Uint8Array.of(1)], 'inner.png', { type: 'image/png' })
+    let paged = false
+    const directoryEntry = {
+      isFile: false,
+      isDirectory: true,
+      createReader: () => ({
+        readEntries: (ok: (entries: unknown[]) => void) => {
+          // readEntries pages: one entry, then the empty page that ends the walk.
+          if (paged) { ok([]); return }
+          paged = true
+          ok([{
+            isFile: true,
+            isDirectory: false,
+            file: (done: (file: File) => void) => { done(inner) },
+          }])
+        },
+      }),
+    }
+    const dataTransfer = {
+      types: ['Files'],
+      files: [new File([], 'folder', { type: '' })],
+      items: [{ webkitGetAsEntry: () => directoryEntry }],
+      dropEffect: 'none',
+    }
+    fireEvent.drop(document.body, { dataTransfer })
+    await vi.waitFor(() => { expect(onAddImages).toHaveBeenCalledWith([inner]) })
+  })
+
+  it('folder drops without attachable images add nothing', async () => {
+    const onAddImages = vi.fn()
+    render(<ComposerAttachments {...props({ onAddImages })} />)
+    const directoryEntry = {
+      isFile: false,
+      isDirectory: true,
+      createReader: () => ({
+        readEntries: (ok: (entries: unknown[]) => void) => { ok([]) },
+      }),
+    }
+    fireEvent.drop(document.body, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [],
+        items: [{ webkitGetAsEntry: () => directoryEntry }],
+        dropEffect: 'none',
+      },
+    })
+    await Promise.resolve()
+    expect(onAddImages).not.toHaveBeenCalled()
+  })
+
+  it('a blocked composer ignores a browser folder drop', () => {
+    const onAddImages = vi.fn()
+    render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddImages })} />)
+    const directoryEntry = { isFile: false, isDirectory: true, createReader: () => ({}) }
+    fireEvent.drop(document.body, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [],
+        items: [{ webkitGetAsEntry: () => directoryEntry }],
+        dropEffect: 'none',
+      },
+    })
+    expect(onAddImages).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,10 @@ import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
+import {
+  droppedEntryImages, droppedEntryOf, hasDroppedDirectory, imageFileFromBridge,
+  type NativeDropPayload,
+} from './drop-intake.ts'
 import { attachmentRailLabels, dropOverlayLabels, lightboxLabels } from './labels.ts'
 import css from './ComposerAttachments.module.css'
 
@@ -16,7 +20,7 @@ interface ComposerRailItem extends AttachmentRailItem {
 
 /** Draft-image rail, document drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, t,
+  attachments, canAcceptDrop, onAddImages, onAddPaths, onRemoveImage, dropLimits, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -26,6 +30,23 @@ export function ComposerAttachments({
   useEffect(() => {
     if (preview !== null && !attachments.some(attachment => attachment.id === preview.id)) setPreview(null)
   }, [attachments, preview])
+
+  // The mounted composer is the native shell's drop receiver: the macOS
+  // overlay owns Finder drags there and delivers absolute paths plus image
+  // bytes. Identity-guarded teardown so an unmounted session never eats a
+  // drop meant for its successor.
+  useEffect(() => {
+    const receive = (payload: NativeDropPayload): void => {
+      const images = (payload.images ?? []).map(image => imageFileFromBridge(image.name, image.type, image.data))
+      if (images.length > 0 && canAcceptDrop) onAddImages(images)
+      const paths = payload.mentions ?? []
+      if (paths.length > 0) onAddPaths(paths)
+    }
+    window.__dshNativeDrop = receive
+    return () => {
+      if (window.__dshNativeDrop === receive) delete window.__dshNativeDrop
+    }
+  }, [canAcceptDrop, onAddImages, onAddPaths])
 
   useEffect(() => {
     const fileTransfer = (event: globalThis.DragEvent): DataTransfer | null => {
@@ -62,7 +83,23 @@ export function ComposerAttachments({
       if (dataTransfer === null) return
       event.preventDefault()
       reset()
-      if (canAcceptDrop) onAddImages([...dataTransfer.files])
+      if (!canAcceptDrop) return
+      // A folder drop: the folder's pseudo-File is an empty husk and
+      // dataTransfer.files never descends, so route through the entry tree
+      // and attach the images found inside. (Absolute-path mentions are the
+      // native shell's job — it intercepts the drop before the page.)
+      // lib.dom types `items` as always present; plain-object fakes in the
+      // jsdom lane omit it.
+      // oxlint-disable-next-line typescript/no-unnecessary-condition
+      const items = dataTransfer.items === undefined ? [] : [...dataTransfer.items]
+      const entries = items.map(item => droppedEntryOf(item))
+      if (!hasDroppedDirectory(entries)) {
+        onAddImages([...dataTransfer.files])
+        return
+      }
+      void droppedEntryImages(entries.filter(entry => entry !== null)).then((images) => {
+        if (images.length > 0) onAddImages(images)
+      })
     }
     document.addEventListener('dragenter', onDragEnter)
     document.addEventListener('dragover', onDragOver)

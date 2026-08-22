@@ -16,6 +16,10 @@ Dynamic attachment presentation plugin for the conversation UI. It waits for the
 
 `DropOverlay` is the full-viewport invitation shown while a file drag is over the page: illustration, title, and a limits line while drops are accepted (`disabled` swaps the blocked illustration and hides the limits line). The layer is pointer-inert — the owner's document-level drag listeners keep the enter/leave count and decide accept/reject; the overlay only shows state. It portals to the body like the lightbox.
 
+## Folder drops and the native shell bridge
+
+A page-level drop never sees absolute paths — `dataTransfer.files` flattens to File objects, and a dropped folder arrives as an empty husk. Two intakes cover the gap. In a browser, a drop containing a folder is walked through the `webkitGetAsEntry` tree (paged directory reads, a 512-entry budget against node_modules-shaped trees) and the images found inside attach through the normal validation path; a folder without attachable images adds nothing, and paths stay out of reach. Under the macOS shell a transparent overlay owns Finder drags before the page sees them: folders and non-image files arrive as absolute-path entries over `window.__dshNativeDrop` and forward to the owner's `onAddPaths`, while image files ride the same payload as base64 bytes, are rebuilt into Files, and attach exactly as a page-level drop did (still gated by `canAcceptDrop`). The mounted composer registers the receiver and withdraws it on unmount, identity-guarded, so a drop always lands on the visible session.
+
 ## Model Experience
 
 None, as the plugin only renders attachment state supplied by the conversation UI and contributes no model-visible input.

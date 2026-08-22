@@ -21,7 +21,8 @@ import type {} from '@deepseek-ai/dsh-goal/client'
 // wire types: apiproxy's sessions contract declares it, and client-runtime's
 // api-remotes import already places it in every client program.
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ComposerBarProps } from '../contract/slots.ts'
+import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
+import type { ComposerBarProps, ComposerDroppedPath } from '../contract/slots.ts'
 import { deriveDecorations } from '../input/decorations.ts'
 import type { DraftDecorations } from '../input/decorations.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
@@ -464,6 +465,25 @@ export function InputBar({
     if (rejected !== null) showToast(rejected)
   }, [addImages, attachments, imageLimits, showToast, t])
 
+  // Native-shell drops arrive as absolute paths (the browser drop path never
+  // sees them): each becomes one @-mention appended to the draft — plain text
+  // is the model form, and the chip look is the machine's scan-derived
+  // decoration, so the plain setDraft write path is the whole job.
+  const intakePaths = useCallback((paths: readonly ComposerDroppedPath[]): void => {
+    if (keyboard === undefined || locked || machineBusy || paths.length === 0) return
+    const mentions = paths.flatMap((dropped) => {
+      const mention = formatFileMention(
+        { path: dropped.path, kind: dropped.directory ? 'directory' : 'file' }, false,
+      )
+      return mention === undefined ? [] : [mention]
+    })
+    if (mentions.length === 0) return
+    const glue = draft === '' || /\s$/u.test(draft) ? '' : ' '
+    const next = `${draft}${glue}${mentions.join(' ')} `
+    keyboard.setDraft(next)
+    keyboard.track(next, next.length)
+  }, [keyboard, locked, machineBusy, draft])
+
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
 
   const onSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>): void => {
@@ -636,6 +656,7 @@ export function InputBar({
           attachments,
           canAcceptDrop,
           onAddImages: intakeImages,
+          onAddPaths: intakePaths,
           onRemoveImage: (id) => { removeImage?.(id) },
           dropLimits: imageLimits === undefined ? undefined : {
             count: imageLimits.maxImagesPerMessage,
