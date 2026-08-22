@@ -1,0 +1,206 @@
+/* RemoteEntry: the trigger row mirrors the cordis footer badge geometry
+   (42px wide row / 36px rail circle); the modal body styles the roster rows
+   and the add-device form. Colors resolve through --dsw-* tokens only. */
+
+.layer {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 42px;
+  margin: 4px 0 0;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 4px);
+  height: 42px;
+  margin: 0 -2px;
+  padding: 0 10px 0 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.trigger:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.triggerLabel {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.triggerDot {
+  flex: none;
+  margin-left: auto;
+}
+
+.layer.rail {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+}
+
+.rail .trigger {
+  justify-content: center;
+  gap: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  position: relative;
+}
+
+/* Rail: the dot hugs the icon's lower-right edge instead of trailing a label. */
+.rail .triggerDot {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  margin-left: 0;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowTitle {
+  font-size: 14px;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pill {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.pill[data-phase="ready"] {
+  color: var(--dsw-alias-state-success, var(--dsw-alias-label-primary));
+}
+
+.pill[data-phase="connecting"] {
+  color: var(--dsw-alias-state-progress, var(--dsw-alias-label-primary));
+}
+
+.pill[data-phase="failed"] {
+  color: var(--dsw-alias-state-error, var(--dsw-alias-label-primary));
+}
+
+.rowMeta {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rowDetail {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-state-error, var(--dsw-alias-label-secondary));
+}
+
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.addToggle {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fieldPair {
+  display: flex;
+  gap: 10px;
+}
+
+.fieldPair .field {
+  flex: 1;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.failure {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-state-error, var(--dsw-alias-label-secondary));
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -14,13 +14,37 @@ import {
 } from './columns.ts'
 
 /**
+ * One remote Harness surface shown inside the window as a browser-style tab.
+ * The tab renders the tunneled UI wholesale (an iframe), so the entry carries
+ * exactly what the open gesture knew: the roster id it was opened from, the
+ * device label the strip shows, and the loopback address the tunnel reported.
+ */
+export interface RemoteTab {
+  /** Roster device id the tab was opened from; re-opening re-keys on it. */
+  id: string
+  /** Device label as the tab strip spells it. */
+  label: string
+  /** The tunneled UI address (a loopback http URL). */
+  url: string
+}
+
+/**
  * Layout store state: panel width preferences in px (0 = closed), plus the
  * narrow-viewport pair — `narrow` mirrors AppFrame's breakpoint reading
  * (viewport < SIDEBAR_AUTO_COLLAPSE) so toggleSidebar can pick semantics, and
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
+ * The remoteTab pair is the window's tab strip: the open remote surfaces and
+ * which one is on stage (`undefined` = the local Harness).
  */
-type LayoutState = { sidebar: number; details: number; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = {
+  sidebar: number
+  details: number
+  narrow: boolean
+  narrowExpanded: boolean
+  remoteTabs: RemoteTab[]
+  activeRemote: string | undefined
+}
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -33,6 +57,10 @@ type LayoutActions = {
   setNarrow: (draft: LayoutState, narrow: boolean) => void
   openDetails: (draft: LayoutState) => void
   closeDetails: (draft: LayoutState) => void
+  openRemoteTab: (draft: LayoutState, tab: RemoteTab) => void
+  activateRemoteTab: (draft: LayoutState, id: string) => void
+  showLocalTab: (draft: LayoutState) => void
+  closeRemoteTab: (draft: LayoutState, id: string) => void
 }
 
 /**
@@ -47,7 +75,14 @@ type LayoutActions = {
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({
+      sidebar: SIDEBAR_DEFAULT,
+      details: 0,
+      narrow: false,
+      narrowExpanded: false,
+      remoteTabs: [],
+      activeRemote: undefined,
+    }),
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
@@ -66,6 +101,28 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       },
       openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
       closeDetails: (d) => { d.details = 0 },
+      // Re-opening a device that already has a tab refreshes its address (the
+      // tunnel may have come back on another port) and re-stages the tab.
+      openRemoteTab: (d, tab: RemoteTab) => {
+        const existing = d.remoteTabs.find(candidate => candidate.id === tab.id)
+        if (existing === undefined) d.remoteTabs.push(tab)
+        else {
+          existing.label = tab.label
+          existing.url = tab.url
+        }
+        d.activeRemote = tab.id
+      },
+      activateRemoteTab: (d, id: string) => {
+        if (d.remoteTabs.some(tab => tab.id === id)) d.activeRemote = id
+      },
+      showLocalTab: (d) => { d.activeRemote = undefined },
+      // Closing the staged tab hands the stage to the most recently opened
+      // survivor, else back to the local Harness.
+      closeRemoteTab: (d, id: string) => {
+        const wasActive = d.activeRemote === id
+        d.remoteTabs = d.remoteTabs.filter(tab => tab.id !== id)
+        if (wasActive) d.activeRemote = d.remoteTabs.at(-1)?.id
+      },
     },
   })
   return handle

@@ -17,6 +17,7 @@ import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import { SIDEBAR_COLLAPSED } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
+import { en } from '@deepseek-ai/dsh-client-ui-layout/src/client/locales.ts'
 import type {
   SessionId, SessionListState, WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -25,6 +26,9 @@ import type {
 const selectedSession = { current: 's-test' as SessionId | undefined }
 const selectedSessionBlank = { current: false }
 const baselinesReady = { current: true }
+
+// English-dictionary translate stub for the tab-strip chrome copy.
+const t: AppFrameProps['t'] = key => (en as Record<string, string>)[key] ?? key
 
 // Render-prop contract stub fed through the standard seat prop (the renderer
 // injects the real one in production): session mode runs children(id), empty
@@ -88,10 +92,14 @@ function mountFrame() {
       useSessions={useSessions}
       useWorkspaces={((sel: (s: WorkspaceListState) => unknown) => sel(workspaceState)) as never}
       SessionProvider={SessionProviderStub}
+      t={t}
     />
   )
   const utils = render(element())
-  const frame = utils.container.firstElementChild as HTMLElement
+  // The tab-strip shell wraps the grid once remote tabs exist; the frame is
+  // the grid element either way, identified by its track style.
+  const frame = (utils.container.querySelector('[style*="grid-template-columns"]')
+    ?? utils.container.firstElementChild) as HTMLElement
   return { instance, frame, slotCalls, rerenderFrame: () => { utils.rerender(element()) }, ...utils }
 }
 
@@ -394,5 +402,76 @@ describe('AppFrame — unmount with an in-flight resize frame', () => {
     frameWidth = 1250
     act(() => { fireResize?.(); fireResize?.(); vi.advanceTimersByTime(20) })
     expect(tracks(frame)).toEqual([280, 330])
+  })
+})
+
+describe('AppFrame — remote tabs', () => {
+  const macMini = { id: 'mac-mini', label: 'Mac Mini', url: 'http://127.0.0.1:3081/' }
+
+  /** The live grid element (identity persists across re-renders, but query fresh). */
+  const gridOf = (container: HTMLElement): HTMLElement =>
+    container.querySelector('[style*="grid-template-columns"]') as HTMLElement
+
+  it('renders no tab strip until a remote tab exists', () => {
+    const { container } = mountFrame()
+    expect(container.querySelector('[role="tablist"]')).toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(gridOf(container).hidden).toBe(false)
+  })
+
+  it('staging a remote tab shows the strip, hides the frame, and mounts the iframe', () => {
+    const { container, instance } = mountFrame()
+    act(() => { instance.actions.openRemoteTab(macMini) })
+
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull()
+    expect(gridOf(container).hidden).toBe(true)
+    const iframe = container.querySelector('iframe')
+    expect(iframe?.getAttribute('src')).toBe(macMini.url)
+    expect(iframe?.hidden).toBe(false)
+    // The local tab offers the way back; the remote tab is the staged one.
+    const tabs = [...container.querySelectorAll('[role="tab"]')]
+    expect(tabs).toHaveLength(2)
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('false')
+    expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(tabs[1]?.textContent).toContain('Mac Mini')
+  })
+
+  it('switching to the local tab keeps the remote iframe mounted but hidden', () => {
+    const { container, instance } = mountFrame()
+    act(() => { instance.actions.openRemoteTab(macMini) })
+    const localTab = container.querySelector('[role="tab"]') as HTMLElement
+    act(() => { localTab.click() })
+
+    expect(gridOf(container).hidden).toBe(false)
+    const iframe = container.querySelector('iframe')
+    expect(iframe).not.toBeNull()
+    expect(iframe?.hidden).toBe(true)
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull()
+  })
+
+  it('clicking a remote tab restages it, and its close control drops the tab', () => {
+    const { container, instance } = mountFrame()
+    act(() => { instance.actions.openRemoteTab(macMini) })
+    act(() => { instance.actions.showLocalTab() })
+
+    const remoteTab = [...container.querySelectorAll('[role="tab"]')][1] as HTMLElement
+    act(() => { remoteTab.click() })
+    expect(gridOf(container).hidden).toBe(true)
+
+    const close = container.querySelector('[aria-label="Close tab Mac Mini"]') as HTMLElement
+    act(() => { close.click() })
+    expect(container.querySelector('[role="tablist"]')).toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(gridOf(container).hidden).toBe(false)
+  })
+
+  it('a refreshed tunnel address remounts the iframe', () => {
+    const { container, instance } = mountFrame()
+    act(() => { instance.actions.openRemoteTab(macMini) })
+    const first = container.querySelector('iframe')
+    act(() => { instance.actions.openRemoteTab({ ...macMini, url: 'http://127.0.0.1:3099/' }) })
+    const second = container.querySelector('iframe')
+    expect(second?.getAttribute('src')).toBe('http://127.0.0.1:3099/')
+    expect(second).not.toBe(first)
   })
 })

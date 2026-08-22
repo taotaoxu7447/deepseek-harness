@@ -1069,6 +1069,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteTunnels',
+    summary: 'The remote-device tunnel roster.',
+    description: 'The remote-device tunnel roster. The composition entry seeds it and the optional `remote` settings section — the web Plugins page\'s Remote card — overrides it live: every list/connect/disconnect reads the currently authoritative section, and a committed change reconciles without a restart (connection-relevant edits restart that device\'s tunnel; removals terminate it; label-only edits never touch a live process). With no devices the service idles. Activation fails loud when no `ssh` client is on PATH.',
+    methods: [
+      {
+        signature: 'list(): RemoteDeviceView[]',
+        description: 'Every device\'s configuration and live tunnel state, in roster order.',
+        parameters: [],
+        returns: 'one view per configured device; `url` is present only while ready.',
+      },
+      {
+        signature: 'connect(id: string): Promise<RemoteDeviceView>',
+        description: 'Mark one device wanted and start its tunnel. Idempotent while a live process exists; from `failed` or a pending backoff it spawns immediately with a fresh backoff budget. The returned view is `connecting`: readiness is observed through list.',
+        parameters: [{ name: 'id', description: 'the roster id.' }],
+        returns: 'the device\'s current view.',
+        throws: ['RemoteTunnelError synchronously when the id is not configured — there is nothing to await before that verdict.'],
+      },
+      {
+        signature: 'async disconnect(id: string): Promise<RemoteDeviceView>',
+        description: 'Mark one device unwanted and take its tunnel down, awaiting the process tree\'s exit so the loopback port is free when this resolves. Idempotent.',
+        parameters: [{ name: 'id', description: 'the roster id.' }],
+        returns: 'the device\'s current view (`disconnected`).',
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',

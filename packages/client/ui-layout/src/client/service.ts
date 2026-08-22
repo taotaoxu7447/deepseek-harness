@@ -9,7 +9,8 @@
  * declared action set, delivered as the registration's bound actions.
  */
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
-import type { createLayoutStore } from './stores.ts'
+import type { createLayoutStore, RemoteTab } from './stores.ts'
+export type { RemoteTab } from './stores.ts'
 
 /** The layout store's bound action set (framework-baked, draft params peeled). */
 export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
@@ -27,6 +28,14 @@ export interface ILayout {
   openDetails(): void
   /** Close the details panel. */
   closeDetails(): void
+  /** Stage one remote device's tunneled UI as a window tab, opening it first if needed. */
+  openRemoteTab(tab: RemoteTab): void
+  /** Bring one open remote tab onto the stage. */
+  activateRemoteTab(id: string): void
+  /** Put the local Harness back on stage without closing any remote tab. */
+  showLocalTab(): void
+  /** Close one remote tab; staging moves to the newest survivor, else local. */
+  closeRemoteTab(id: string): void
 }
 
 /** Cross-plugin panel-action face (ctx.layout). */
@@ -57,6 +66,26 @@ export class LayoutController implements ILayout {
   /** Close the details panel. */
   closeDetails(): void {
     this.#require().closeDetails()
+  }
+
+  /** Stage one remote device's tunneled UI as a window tab. */
+  openRemoteTab(tab: RemoteTab): void {
+    this.#require().openRemoteTab(tab)
+  }
+
+  /** Bring one open remote tab onto the stage. */
+  activateRemoteTab(id: string): void {
+    this.#require().activateRemoteTab(id)
+  }
+
+  /** Put the local Harness back on stage. */
+  showLocalTab(): void {
+    this.#require().showLocalTab()
+  }
+
+  /** Close one remote tab. */
+  closeRemoteTab(id: string): void {
+    this.#require().closeRemoteTab(id)
   }
 
   #require(): PanelActions {
