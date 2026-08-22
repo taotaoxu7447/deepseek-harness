@@ -855,6 +855,7 @@ describe('RemoteCard', () => {
       invalid: false,
       rows,
       rowPorts: rows.map(() => ({ remotePort: '', localPort: '' })),
+      rowConfigured: rows.map(() => false),
       tunnels,
       ...state,
     })
@@ -963,5 +964,25 @@ describe('RemoteCard', () => {
     fireEvent.click(screen.getByRole('button', { name: en.discard }))
     expect(face.save).toHaveBeenCalledOnce()
     expect(face.discard).toHaveBeenCalledOnce()
+  })
+
+  it('collapses configured rows by default and toggles individual or all rows', () => {
+    renderRemote(
+      [{ id: 'work', sshTarget: 'work' }, { id: 'new-device' }],
+      [undefined, undefined],
+      { rowConfigured: [true, false] },
+    )
+
+    // Configured row 0 starts collapsed, unconfigured row 1 starts expanded
+    expect(screen.queryAllByRole('textbox', { name: en.remoteSshTarget })).toHaveLength(1)
+
+    // Clicking the row 0 toggle button expands it
+    const toggles = screen.getAllByRole('button', { name: en.visionExpand })
+    fireEvent.click(toggles[0]!)
+    expect(screen.getAllByRole('textbox', { name: en.remoteSshTarget })).toHaveLength(2)
+
+    // Clicking collapse all collapses both
+    fireEvent.click(screen.getByRole('button', { name: en.visionCollapseAll }))
+    expect(screen.queryAllByRole('textbox', { name: en.remoteSshTarget })).toHaveLength(0)
   })
 })

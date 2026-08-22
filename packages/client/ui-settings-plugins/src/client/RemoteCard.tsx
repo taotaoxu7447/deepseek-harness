@@ -8,7 +8,7 @@
  * bare link, so it gets an explicit in-place navigation).
  */
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { ToggleField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
@@ -33,6 +33,10 @@ interface RemoteRowView {
   row: RemoteDeviceRow
   /** The Host's live tunnel state for this row, when the poll has answered. */
   tunnel: RemoteTunnelState | undefined
+  /** Whether this row renders collapsed to its head. */
+  collapsed: boolean
+  /** Toggle this row's collapsed state. */
+  toggleCollapsed: () => void
 }
 
 /** The status pill beside one row's head. */
@@ -83,12 +87,19 @@ function tunnelControls(view: RemoteRowView): ReactNode {
 
 /** Render one roster row of the staged list. */
 function remoteRow(view: RemoteRowView): ReactNode {
-  const { t, face, state, index, row, tunnel } = view
+  const { t, face, state, index, row, tunnel, collapsed, toggleCollapsed } = view
   const disabled = !state.writable
   return (
     <div className={rowCss.row} role="group" aria-label={row.id}>
       <div className={rowCss.rowHead}>
-        <span className={rowCss.title}>
+        <button
+          type="button"
+          className={rowCss.handle}
+          aria-label={collapsed ? t('visionExpand') : t('visionCollapse')}
+          title={collapsed ? t('visionExpand') : t('visionCollapse')}
+          onClick={toggleCollapsed}
+        >{collapsed ? '▸' : '▾'}</button>
+        <span className={rowCss.title} onClick={toggleCollapsed} style={{ cursor: 'pointer' }}>
           {row.label !== undefined && row.label !== '' ? row.label : row.id}
           {row.label !== undefined && row.label !== '' ? <span className={rowCss.titleId}> · {row.id}</span> : null}
         </span>
@@ -100,7 +111,7 @@ function remoteRow(view: RemoteRowView): ReactNode {
         {tunnelControls(view)}
       </div>
       {tunnel?.detail !== undefined ? <p className={rowCss.detail} role="status">{tunnel.detail}</p> : null}
-      <div className={rowCss.rowBody}>
+      <div className={rowCss.rowBody} hidden={collapsed}>
         <ValueField
           id={`remote-row-${index}-id`}
           label={t('remoteId')}
@@ -194,12 +205,35 @@ export function RemoteCard(props: RemoteCardProps) {
   const state = props.useRemoteCard(snapshot => snapshot)
   const face: Omit<RemoteCardFace, 'hooks'> = props
   const disabled = !state.writable
+
+  // Newly added (staged, never-persisted) rows default expanded so the
+  // user immediately sees their fields; already-configured rows from disk
+  // default collapsed so long lists stay tidy. Per-row overrides win.
+  const [collapseOverrides, setCollapseOverrides] = useState<ReadonlyMap<string, boolean>>(() => new Map())
+
+  const rowCollapsed = (index: number, id: string): boolean => {
+    const override = collapseOverrides.get(id)
+    if (override !== undefined) return override
+    return state.rowConfigured?.[index] ?? false
+  }
+
+  const toggleOne = (index: number, id: string) => {
+    setCollapseOverrides(prev => new Map(prev).set(id, !rowCollapsed(index, id)))
+  }
+
+  const allCollapsed = state.rows.length > 0 && state.rows.every((row, index) => rowCollapsed(index, row.id))
+
+  const setAllCollapsed = (value: boolean) => {
+    setCollapseOverrides(new Map(state.rows.map(row => [row.id, value])))
+  }
+
   // The poll belongs to the card being rendered: it starts on mount and stops
   // on unmount, so an absent card never keeps a timer alive.
   useEffect(() => {
     props.setPolling(true)
     return () => { props.setPolling(false) }
   }, [props])
+
   return (
     <PluginCard
       t={t}
@@ -212,7 +246,16 @@ export function RemoteCard(props: RemoteCardProps) {
       <div className={rowCss.roster}>
         {state.rows.map((row, index) => (
           <div key={row.id}>
-            {remoteRow({ t, face, state, index, row, tunnel: state.tunnels[index] })}
+            {remoteRow({
+              t,
+              face,
+              state,
+              index,
+              row,
+              tunnel: state.tunnels[index],
+              collapsed: rowCollapsed(index, row.id),
+              toggleCollapsed: () => { toggleOne(index, row.id) },
+            })}
           </div>
         ))}
         {state.rows.length === 0 ? <p className={rowCss.detail}>{t('remoteEmpty')}</p> : null}
@@ -220,6 +263,12 @@ export function RemoteCard(props: RemoteCardProps) {
       <div className={css.head}>
         <button type="button" className={css.reset} disabled={disabled}
           onClick={() => { props.addRow() }}>{t('remoteAddDevice')}</button>
+        {state.rows.length > 0 ? (
+          <button type="button" className={css.reset}
+            onClick={() => { setAllCollapsed(!allCollapsed) }}>
+            {allCollapsed ? t('visionExpandAll') : t('visionCollapseAll')}
+          </button>
+        ) : null}
       </div>
     </PluginCard>
   )

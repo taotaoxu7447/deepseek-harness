@@ -79,10 +79,11 @@ export interface RemoteCardState {
   rows: readonly RemoteDeviceRow[]
   /** Per-row port drafts, indexed with `rows`. */
   rowPorts: readonly RemoteRowPorts[]
+  /** Per-row "already configured" flag, indexed with `rows`; the card collapses those rows by default. */
+  rowConfigured: readonly boolean[]
   /** Per-row live tunnel state, indexed with `rows`; absent before the first poll answers. */
   tunnels: readonly (RemoteTunnelState | undefined)[]
 }
-
 /** The registration-side face the Remote card's slot entry injects. */
 export interface RemoteCardFace {
   hooks: {
@@ -201,6 +202,7 @@ export class RemoteCardController {
       invalid: false,
       rows: this.entries.map(entry => entry.row),
       rowPorts: this.entries.map(entry => entry.ports),
+      rowConfigured: this.entries.map(entry => entry.row.id.trim() !== '' && (entry.row.sshTarget !== undefined || entry.ports.remotePort !== '')),
       // Live state keys on the device id, so a reorder or reseed never shows
       // one device's tunnel beside another row.
       tunnels: this.entries.map(entry => this.tunnels.find(tunnel => tunnel.id === entry.row.id)),
