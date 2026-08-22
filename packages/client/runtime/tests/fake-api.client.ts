@@ -282,6 +282,16 @@ export class FakeApiClient implements IApiClient {
     discoverModels: payload => this.record('vision.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
   }
 
+  readonly remote: IApiClient['remote'] = {
+    list: payload => this.record('remote.list', payload, Promise.resolve(ok({ devices: [] }))),
+    connect: payload => this.record('remote.connect', payload, Promise.resolve(ok({
+      device: { id: payload.id, sshTarget: '', remotePort: 0, localPort: 0, autoConnect: false, tunnel: 'disconnected' as const },
+    }))),
+    disconnect: payload => this.record('remote.disconnect', payload, Promise.resolve(ok({
+      device: { id: payload.id, sshTarget: '', remotePort: 0, localPort: 0, autoConnect: false, tunnel: 'disconnected' as const },
+    }))),
+  }
+
   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
   suppressStreamOpen = false
 

@@ -3059,6 +3059,21 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     vision: {
       discoverModels: request => ok(request, { models: [{ id: 'fixture-vision-model' }] }),
     },
+    // The fixture machine has no SSH tunnels: the roster reads empty and the
+    // verbs fail loud, the same contract an uncomposed Host serves.
+    remote: {
+      list: request => ok(request, { devices: [] }),
+      connect: request => err(request, {
+        code: 'remote-tunnel-failed',
+        message: 'fixture mode has no remote-tunnels service',
+        details: { id: request.payload.id },
+      }),
+      disconnect: request => err(request, {
+        code: 'remote-tunnel-failed',
+        message: 'fixture mode has no remote-tunnels service',
+        details: { id: request.payload.id },
+      }),
+    },
     respond(message: ClientResponse): Promise<RpcReceipt> {
       // Same routing discipline as the host: rpcId first, then the payload's
       // audit correlation; a settled or unknown id is not-pending.
@@ -3231,6 +3246,9 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'llm.models': return this.api.llm.models(request)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
       case 'vision.discoverModels': return this.api.vision.discoverModels(request, signal)
+      case 'remote.list': return this.api.remote.list(request)
+      case 'remote.connect': return this.api.remote.connect(request)
+      case 'remote.disconnect': return this.api.remote.disconnect(request)
     }
   }
 
