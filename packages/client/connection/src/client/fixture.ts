@@ -3256,6 +3256,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'remote.connect': return this.api.remote.connect(request)
       case 'remote.disconnect': return this.api.remote.disconnect(request)
       case 'v4Monitor.state': return this.api.v4Monitor.state(request)
+      case 'balance.get': return this.api.balance.get(request)
     }
   }
 

@@ -27,7 +27,7 @@ export const zh: Record<DeepSeekBalanceLocaleKey, string> = {
   balanceCapsuleLabel: 'DeepSeek 余额 {amount}',
 }
 
-declare module '@deepseek-ai/dsh-client-locale/client' {
+declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     deepseekBalance: DeepSeekBalanceLocaleKey
   }

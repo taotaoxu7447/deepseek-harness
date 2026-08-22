@@ -69,6 +69,7 @@ function makeScope(stored: RemoteSettings = {}) {
       revision: 1,
       writable: true,
       mode: 'host',
+      secrets: [],
     }),
     subscribe: () => () => {},
     set,
