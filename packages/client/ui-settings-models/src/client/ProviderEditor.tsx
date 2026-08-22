@@ -32,6 +32,9 @@ import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
+import {
+  formatStreamIdleTimeout, parseStreamIdleTimeout, STREAM_IDLE_TIMEOUT_PLACEHOLDER_S,
+} from './stream-idle-timeout.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -201,6 +204,29 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const stringAt = (source: unknown, key: string): string | undefined => {
     const value = schema.getPath(source, [key])
     return typeof value === 'string' && value.trim().length > 0 ? value : undefined
+  }
+  /** A root key's numeric value, or `undefined` when unset or not a number. */
+  const numberAt = (source: unknown, key: string): number | undefined => {
+    const value = schema.getPath(source, [key])
+    return typeof value === 'number' ? value : undefined
+  }
+  // The stream-idle field is edited as seconds while the adapters store ms;
+  // the buffer holds half-typed text the parse cannot carry (same contract as
+  // the model rows' capacity buffers), and unreadable text blocks Apply below.
+  const [idleEditing, setIdleEditing] = useState<string | undefined>(undefined)
+  const idleText = idleEditing ?? formatStreamIdleTimeout(numberAt(draft, 'streamIdleTimeoutMs'))
+  const idleParsed = parseStreamIdleTimeout(idleText)
+  const idleInvalid = idleParsed !== undefined && Number.isNaN(idleParsed)
+  const idlePlaceholder = formatStreamIdleTimeout(numberAt(fallback, 'streamIdleTimeoutMs'))
+    || STREAM_IDLE_TIMEOUT_PLACEHOLDER_S
+  const editIdleTimeout = (text: string): void => {
+    setIdleEditing(text)
+    const parsed = parseStreamIdleTimeout(text)
+    if (parsed === undefined) {
+      setDraft(current => schema.deletePath(current, ['streamIdleTimeoutMs']))
+    } else if (!Number.isNaN(parsed)) {
+      setDraft(current => schema.setPath(current, ['streamIdleTimeoutMs'], parsed))
+    }
   }
   const setField = (key: string, next: string | undefined): void => {
     // A value of nothing but whitespace is cleared, not stored: `stringAt`
@@ -434,6 +460,26 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 }}
               />
             </div>
+            {/* Both adapter families accept the same root-level key — the
+                deepseek section and a pi-ai profile alike — so one field
+                serves both layouts. */}
+            <div className={styles['field']}>
+              <span className={styles['fieldLabel']}>{t('streamIdleTimeout')}</span>
+              <input
+                className={styles['input']}
+                type="text"
+                inputMode="decimal"
+                value={idleText}
+                placeholder={idlePlaceholder}
+                aria-label={t('streamIdleTimeout')}
+                aria-invalid={idleInvalid || undefined}
+                disabled={disabled}
+                onChange={(event) => { editIdleTimeout(event.target.value) }}
+              />
+              {idleInvalid
+                ? <p className={styles['error']}>{t('streamIdleTimeoutInvalid')}</p>
+                : <p className={styles['advancedHint']}>{t('streamIdleTimeoutHint')}</p>}
+            </div>
             {/* The protocol sits beside the endpoint it describes, as it does
                 on the create card. */}
             {ownsIdentity
@@ -505,7 +551,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       <EditorFooter
         t={t}
         busy={busy}
-        submitDisabled={disabled || layout === 'unknown'
+        submitDisabled={disabled || layout === 'unknown' || idleInvalid
           || (props.credentialOnly !== true && modelFailure !== undefined)
           || shownKeyFailure !== undefined
           || (props.credentialRequired === true && keyValue.length === 0)}

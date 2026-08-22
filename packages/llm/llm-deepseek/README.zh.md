@@ -19,7 +19,7 @@ harness LLM（大语言模型）seam 的 DeepSeek chat-completions 适配器：�
     thinking: enabled        # optional; provider default is enabled
     reasoningEffort: high    # optional; off | low | high | max — omitted ⇒ high
     maxTokens: 256000        # optional positive per-request output cap; this is the default
-    streamIdleTimeoutMs: 300000 # optional; positive finite Node timer delay; five-minute default
+    streamIdleTimeoutMs: 600000 # optional; positive finite Node timer delay; ten-minute default
     maxRequestImageBytes: 20971520 # optional positive integer; 20 MiB base64-payload default
     retryPolicy:             # optional; omission uses normal mode with five retries
       mode: always           # normal | always

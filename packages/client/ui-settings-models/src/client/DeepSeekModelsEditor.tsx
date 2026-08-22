@@ -11,13 +11,14 @@ import {
   IconChevronDownOutline14, IconChevronRightOutline14, IconPlusOutline16, IconTrashOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { en } from './locales.ts'
+import { ModalityChips, modalitiesOf } from './ModalityChips.tsx'
 import styles from './ModelsSection.module.css'
 
 /** One catalog entry kept structurally open so hidden or future fields survive an edit. */
 export type DeepSeekModelDraft = Record<string, unknown>
 
 /** The catalog fields this editor writes. */
-type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
+type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens' | 'inputModalities'
 
 /** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
 type CapacityField = 'contextWindow' | 'maxTokens'
@@ -343,6 +344,16 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
                     <div className={styles['modelAdvanced']}>
                       {capacityField(model, index, 'contextWindow', props.defaultContextWindow)}
                       {capacityField(model, index, 'maxTokens', props.defaultMaxTokens)}
+                      <div className={styles['modelField']}>
+                        <span className={styles['modelFieldLabel']}>{props.t('modelInputModalities')}</span>
+                        <ModalityChips
+                          value={modalitiesOf(model, 'inputModalities')}
+                          ariaLabel={`${props.t('modelInputModalities')} ${String(index + 1)}`}
+                          disabled={props.disabled}
+                          t={props.t}
+                          onChange={(next) => { update(index, 'inputModalities', next) }}
+                        />
+                      </div>
                     </div>
                   )
                   : null}

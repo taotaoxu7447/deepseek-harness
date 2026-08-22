@@ -754,7 +754,7 @@ describe('hand-declared providers', () => {
     await mountSection({ providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY' } } })
     openEditor('openai')
     fireEvent.click(screen.getByText(en.customized))
-    expect(fields()).toEqual([en.keyInput, en.baseUrl])
+    expect(fields()).toEqual([en.keyInput, en.baseUrl, en.streamIdleTimeout])
     cleanup()
 
     // A hand-declared route named its own protocol at creation, so editing it
@@ -764,7 +764,63 @@ describe('hand-declared providers', () => {
       declaredRoutes: ['acme-gateway'],
     })
     openEditor('acme-gateway')
-    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
+    expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.streamIdleTimeout, en.customApi])
+  })
+
+  it('edits the stream idle timeout in seconds and stores milliseconds', async () => {
+    const { mutate } = await mountSection({
+      providers: { 'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test/v1' } },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+
+    const field = screen.getByLabelText<HTMLInputElement>(en.streamIdleTimeout)
+    // Nothing configured: the adapter default reads as the placeholder only.
+    expect(field.value).toBe('')
+    expect(field.placeholder).toBe('600')
+
+    // Unreadable text keeps the last good draft, names the row, and blocks Apply.
+    fireEvent.change(field, { target: { value: 'soon' } })
+    expect(screen.queryByText(en.streamIdleTimeoutInvalid)).not.toBeNull()
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+
+    fireEvent.change(field, { target: { value: '900' } })
+    expect(screen.queryByText(en.streamIdleTimeoutInvalid)).toBeNull()
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toContainEqual({
+      op: 'set',
+      path: ['providers', 'acme-gateway', 'streamIdleTimeoutMs'],
+      value: 900_000,
+    })
+  })
+
+  it('shows a stored timeout in seconds and clears back to the inherited default', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        'acme-gateway': {
+          api: 'openai-completions',
+          baseURL: 'https://acme.test/v1',
+          streamIdleTimeoutMs: 1_200_000,
+        },
+      },
+      declaredRoutes: ['acme-gateway'],
+    })
+    openEditor('acme-gateway')
+
+    const field = screen.getByLabelText<HTMLInputElement>(en.streamIdleTimeout)
+    expect(field.value).toBe('1200')
+    fireEvent.change(field, { target: { value: '' } })
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toContainEqual({
+      op: 'unset',
+      path: ['providers', 'acme-gateway', 'streamIdleTimeoutMs'],
+    })
   })
 
   it('renames a declared route and falls back to its id when the name is cleared', async () => {

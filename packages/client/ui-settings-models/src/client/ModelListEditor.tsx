@@ -21,6 +21,7 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import { messageOf } from './store.ts'
+import { ModalityChips, modalitiesOf } from './ModalityChips.tsx'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 import {
@@ -261,7 +262,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, string | number | boolean | null | undefined | Record<string, unknown>>): void => {
+  const patch = (index: number, next: Record<string, unknown>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -498,6 +499,16 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                       onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                     />
                   </label>
+                  <div className={`${styles['modelField']} ${styles['effortField']}`}>
+                    <span className={styles['modelFieldLabel']}>{t('modelInputModalities')}</span>
+                    <ModalityChips
+                      value={modalitiesOf(model, 'input')}
+                      ariaLabel={`${t('modelInputModalities')} ${index + 1}`}
+                      disabled={disabled}
+                      t={t}
+                      onChange={(next) => { patch(index, { input: next }) }}
+                    />
+                  </div>
                   <div className={`${styles['modelField']} ${styles['effortField']}`}>
                     <span className={styles['modelFieldLabel']}>{t('modelReasoningEfforts')}</span>
                     <div className={styles['effortToolbar']}>
