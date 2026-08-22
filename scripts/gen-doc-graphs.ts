@@ -532,6 +532,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement).',
   },
   {
+    key: 'remoteTunnels',
+    pkg: 'remote-tunnels',
+    title: 'SSH tunnels to remote dsh hosts',
+    mode: 'core',
+    consumers: ['apiproxy'],
+    note: 'Owns one lifecycle per roster device: spawn ssh -L, probe the forwarded loopback port, supervise with backoff; the apiproxy remote domain reads the roster and delegates the verbs.',
+  },
+  {
     key: 'webServer',
     pkg: 'webserver',
     title: 'HTTP route registration',

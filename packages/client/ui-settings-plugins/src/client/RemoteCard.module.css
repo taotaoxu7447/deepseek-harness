@@ -1,0 +1,111 @@
+/* Remote roster rows: status pill, detail line, ready actions. */
+
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.row {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3);
+  padding: 4px 12px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 2px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.titleId {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pillMuted {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pillWorking {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pillReady {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  font-weight: 500;
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-on-primary, #fff);
+}
+
+.pillFailed {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  font-weight: 500;
+  background: var(--dsw-alias-functional-error, #c00);
+  color: var(--dsw-alias-label-on-primary, #fff);
+}
+
+.detail {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+  word-break: break-word;
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.open {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--dsw-alias-brand-primary);
+  text-decoration: none;
+}
+
+.open:hover {
+  text-decoration: underline;
+}

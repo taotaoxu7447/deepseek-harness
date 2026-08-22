@@ -113,6 +113,7 @@
     "@deepseek-ai/dsh-user-approval": "workspace:^",
     "@deepseek-ai/dsh-user-questions": "workspace:^",
     "@deepseek-ai/dsh-vision": "workspace:^",
+    "@deepseek-ai/dsh-remote-tunnels": "workspace:^",
     "@deepseek-ai/dsh-vision-qwen": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",

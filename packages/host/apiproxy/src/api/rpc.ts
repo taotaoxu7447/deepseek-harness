@@ -87,6 +87,12 @@ export interface RpcErrorDetailsMap {
    * endpoint asked, never the credential offered.
    */
   'vision-discovery-failed': { baseURL: string }
+  /**
+   * A remote-device tunnel verb failed: the id names no configured roster
+   * entry, or the tunnel could not be acted on. The message is the tunnel
+   * service's own text; the details name the device asked.
+   */
+  'remote-tunnel-failed': { id: string }
   'title-invalid': { sessionId: SessionId }
   'fork-unavailable': { sessionId: SessionId }
   'subagent-parent-unavailable': { parentSessionId: SessionId }

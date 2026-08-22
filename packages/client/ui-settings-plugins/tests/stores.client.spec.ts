@@ -14,6 +14,9 @@ import {
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
 import { VisionCardController, type VisionSettings } from '../src/client/vision-card-controller.ts'
+import {
+  REMOTE_POLL_MS, RemoteCardController, type RemoteSettings, type RemoteTunnelState,
+} from '../src/client/remote-card-controller.ts'
 import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
 
 /** Make the stub behave like a Host that accepts every write. */
@@ -1297,5 +1300,368 @@ describe('VisionCardController', () => {
     controller.refreshCredential('VISION_QWEN_API_KEY')   // the derived default
     controller.refreshCredential('MY_VISION_KEY')          // the declared reference
     await vi.waitFor(() => { expect(w.describe.mock.calls.length).toBe(calls + 2) })
+  })
+})
+
+describe('RemoteCardController', () => {
+  /** Wire mocks for the remote domain: an answerable roster poll and the two verbs. */
+  function remoteWire(devices: RemoteTunnelState[] = []) {
+    const list = vi.fn(() => Promise.resolve({
+      rpcId: 'r-1' as never,
+      result: { ok: true as const, value: { devices } },
+    }))
+    const settle = () => Promise.resolve({ rpcId: 'r-2' as never, result: { ok: true as const, value: {} } })
+    const connect = vi.fn(settle)
+    const disconnect = vi.fn(settle)
+    const api = { remote: { list, connect, disconnect } }
+    return { api: api as unknown as Pick<IApiClient, 'remote'>, list, connect, disconnect }
+  }
+
+  function section(host: StubSettingsScope<RemoteSettings>, devices: RemoteSettings['devices']): void {
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { ...devices === undefined ? {} : { devices } },
+      base: {},
+      user: {},
+    })
+  }
+
+  function navigation() {
+    return { open: vi.fn(), assign: vi.fn() }
+  }
+
+  it('seeds the staged roster and port drafts from the stored section', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [
+      { id: 'work', label: 'Work', sshTarget: 'work', remotePort: 3080, localPort: 14000, autoConnect: true },
+      { id: 'hk' },
+    ])
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.rows.map(row => row.id)).toEqual(['work', 'hk'])
+    expect(state.rows[0]).toEqual({ id: 'work', label: 'Work', sshTarget: 'work', autoConnect: true })
+    expect(state.rowPorts[0]).toEqual({ remotePort: '3080', localPort: '14000' })
+    expect(state.rowPorts[1]).toEqual({ remotePort: '', localPort: '' })
+    expect(state.dirty).toBe(false)
+    expect(state.tunnels).toEqual([undefined, undefined])
+  })
+
+  it('stages edits and saves the whole roster, parsing ports and dropping blanked keys', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    acceptWrites(host)
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', label: 'Work', sshTarget: 'work', remotePort: 3080, localPort: 14000, autoConnect: true }])
+    const face = controller.inject()
+
+    face.editRow(0, 'label', '  ')
+    face.editRowPort(0, 'remotePort', '3090')
+    face.addRow()
+    face.editRow(1, 'sshTarget', 'hk')
+    expect(controller.inject().hooks.remoteCard.getSnapshot().dirty).toBe(true)
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalled() })
+
+    const [field, value] = host.set.mock.calls[0] as unknown as [string, unknown]
+    expect(field).toBe('devices')
+    expect(value).toEqual([
+      { id: 'work', sshTarget: 'work', autoConnect: true, remotePort: 3090, localPort: 14000 },
+      { id: 'device-2', sshTarget: 'hk' },
+    ])
+    await vi.waitFor(() => {
+      const state = controller.inject().hooks.remoteCard.getSnapshot()
+      expect(state.dirty).toBe(false)
+      expect(state.rows).toHaveLength(2)
+      expect(state.rowPorts[0]?.remotePort).toBe('3090')
+    })
+  })
+
+  it('mints an add-row id past every existing one', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'device-2' }])
+    const face = controller.inject()
+
+    face.addRow()
+    expect(controller.inject().hooks.remoteCard.getSnapshot().rows.map(row => row.id)).toEqual(['device-2', 'device-3'])
+  })
+
+  it('fails the save without a write when a staged port is out of range', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.editRowPort(0, 'localPort', '70000')
+    face.save()
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.remoteCard.getSnapshot().failed).toBe(true)
+    })
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('keeps the failure banner up after a rejected write reseeds the drafts', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    host.set.mockRejectedValue(new Error('the deployment refused the write'))
+    const face = controller.inject()
+
+    face.editRow(0, 'label', 'Work')
+    face.save()
+    await vi.waitFor(() => {
+      const state = controller.inject().hooks.remoteCard.getSnapshot()
+      expect(state.failed).toBe(true)
+      expect(state.dirty).toBe(false)
+      expect(state.rows[0]?.label).toBeUndefined()
+    })
+  })
+
+  it('discards staged edits back to the stored section', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.editRow(0, 'label', 'Work')
+    face.addRow()
+    face.discard()
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.dirty).toBe(false)
+    expect(state.rows).toEqual([{ id: 'work', sshTarget: 'work' }])
+  })
+
+  it('maps the polled tunnel state onto rows by id, not position', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire([
+      { id: 'a', tunnel: 'ready', url: 'http://127.0.0.1:13389/' },
+      { id: 'b', tunnel: 'failed', detail: 'permission denied (publickey)' },
+    ])
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'b', sshTarget: 'b' }, { id: 'a', sshTarget: 'a' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => {
+      const state = controller.inject().hooks.remoteCard.getSnapshot()
+      expect(state.tunnels[0]?.tunnel).toBe('failed')
+      expect(state.tunnels[1]?.tunnel).toBe('ready')
+    })
+    face.setPolling(false)
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.tunnels[0]?.detail).toBe('permission denied (publickey)')
+    expect(state.tunnels[1]?.url).toBe('http://127.0.0.1:13389/')
+  })
+
+  it('runs the verbs against the row id and refreshes, swallowing a rejection', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire([{ id: 'work', tunnel: 'disconnected' }])
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.connect(0)
+    await vi.waitFor(() => { expect(w.connect).toHaveBeenCalledWith({ id: 'work' }) })
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalled() })
+
+    w.disconnect.mockRejectedValueOnce(new Error('host unreachable'))
+    face.disconnect(0)
+    await vi.waitFor(() => { expect(w.disconnect).toHaveBeenCalledWith({ id: 'work' }) })
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalledTimes(2) })
+  })
+
+  it('navigates only for a row whose poll published a url', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const nav = navigation()
+    const w = remoteWire([
+      { id: 'work', tunnel: 'ready', url: 'http://127.0.0.1:13389/' },
+      { id: 'hk', tunnel: 'disconnected' },
+    ])
+    const controller = new RemoteCardController(host.scope, w.api, nav)
+    section(host, [{ id: 'work', sshTarget: 'work' }, { id: 'hk', sshTarget: 'hk' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.remoteCard.getSnapshot().tunnels[0]?.url).toBe('http://127.0.0.1:13389/')
+    })
+    face.setPolling(false)
+
+    face.openExternal(0)
+    face.openHere(0)
+    expect(nav.open).toHaveBeenCalledWith('http://127.0.0.1:13389/')
+    expect(nav.assign).toHaveBeenCalledWith('http://127.0.0.1:13389/')
+
+    face.openExternal(1)
+    face.openHere(1)
+    expect(nav.open).toHaveBeenCalledTimes(1)
+    expect(nav.assign).toHaveBeenCalledTimes(1)
+  })
+
+  it('polls on an interval only while active', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = stubSettingsScope<RemoteSettings>()
+      const w = remoteWire([])
+      const controller = new RemoteCardController(host.scope, w.api, navigation())
+      section(host, [{ id: 'work', sshTarget: 'work' }])
+      const face = controller.inject()
+
+      face.setPolling(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(w.list).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS)
+      expect(w.list).toHaveBeenCalledTimes(2)
+
+      // Repeating the same request is a no-op; stopping ends the interval.
+      face.setPolling(true)
+      face.setPolling(false)
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS * 3)
+      expect(w.list).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores row actions aimed outside the roster', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const nav = navigation()
+    const controller = new RemoteCardController(host.scope, w.api, nav)
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.editRow(9, 'label', 'nope')
+    face.editRowPort(9, 'localPort', '14000')
+    face.removeRow(9)
+    face.connect(9)
+    face.disconnect(9)
+    face.openExternal(9)
+    face.openHere(9)
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.dirty).toBe(false)
+    expect(state.rows).toHaveLength(1)
+    expect(w.connect).not.toHaveBeenCalled()
+    expect(w.disconnect).not.toHaveBeenCalled()
+    expect(nav.open).not.toHaveBeenCalled()
+    expect(nav.assign).not.toHaveBeenCalled()
+  })
+
+  it('leaves the staged roster alone when a poll fails', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    w.list.mockRejectedValue(new Error('offline'))
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalled() })
+    face.setPolling(false)
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.tunnels).toEqual([undefined])
+  })
+
+  it('removes a staged row', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work' }, { id: 'hk' }])
+    const face = controller.inject()
+
+    face.removeRow(0)
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.dirty).toBe(true)
+    expect(state.rows.map(row => row.id)).toEqual(['hk'])
+    expect(state.rowPorts).toHaveLength(1)
+  })
+
+  it('deletes a blanked sshTarget and stages a boolean verbatim', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work', autoConnect: true }])
+    const face = controller.inject()
+
+    face.editRow(0, 'sshTarget', '   ')
+    face.editRow(0, 'autoConnect', false)
+    expect(controller.inject().hooks.remoteCard.getSnapshot().rows[0]).toEqual({ id: 'work', autoConnect: false })
+  })
+
+  it('folds a poll requested mid-flight into one follow-up', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    w.list.mockImplementationOnce(() => gate.then(() => ({
+      rpcId: 'r-1' as never,
+      result: { ok: true as const, value: { devices: [] } },
+    })))
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalledTimes(1) })
+    // The verb's refresh arrives while the first poll is still on the wire.
+    face.connect(0)
+    await vi.waitFor(() => { expect(w.connect).toHaveBeenCalled() })
+    release()
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalledTimes(2) })
+    face.setPolling(false)
+  })
+
+  it('refuses to save a read-only document', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    host.publish({
+      status: 'ready',
+      writable: false,
+      value: { devices: [{ id: 'work', sshTarget: 'work' }] },
+      base: {},
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.editRow(0, 'label', 'Work')
+    face.save()
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('defaults navigation to the window surfaces', async () => {
+    const open = vi.fn()
+    const assign = vi.fn()
+    vi.stubGlobal('window', { open, location: { assign } })
+    try {
+      const host = stubSettingsScope<RemoteSettings>()
+      const w = remoteWire([{ id: 'work', tunnel: 'ready', url: 'http://127.0.0.1:13389/' }])
+      const controller = new RemoteCardController(host.scope, w.api)
+      section(host, [{ id: 'work', sshTarget: 'work' }])
+      const face = controller.inject()
+
+      face.setPolling(true)
+      await vi.waitFor(() => {
+        expect(controller.inject().hooks.remoteCard.getSnapshot().tunnels[0]?.url).toBe('http://127.0.0.1:13389/')
+      })
+      face.setPolling(false)
+
+      face.openExternal(0)
+      face.openHere(0)
+      expect(open).toHaveBeenCalledWith('http://127.0.0.1:13389/', '_blank', 'noopener')
+      expect(assign).toHaveBeenCalledWith('http://127.0.0.1:13389/')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

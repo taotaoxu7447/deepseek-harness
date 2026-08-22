@@ -244,6 +244,7 @@
     { "path": "./packages/vision/vision" },
     { "path": "./packages/vision/vision-qwen" },
     { "path": "./packages/vision/tool-vision" },
+    { "path": "./packages/remote/remote-tunnels" },
     { "path": "./packages/spill/spill" },
     { "path": "./packages/spill/spill-local" },
     { "path": "./packages/spill/spill-policy" },

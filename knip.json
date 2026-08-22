@@ -585,6 +585,15 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/remote/remote-tunnels": {
+      "entry": [
+        "tests/**/*.spec.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
     "packages/examples/acp-demo": {
       "entry": [
         "tests/**/*.spec.ts",

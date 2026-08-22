@@ -90,6 +90,7 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // presence decides whether pasted images may enter a text-only session as
 // view_image pointers (the admission bridge in `prompt`).
 import type {} from '@deepseek-ai/dsh-vision'
+import type {} from '@deepseek-ai/dsh-remote-tunnels'
 // Side-effect type import: resolves the `approval/request` waterfall and
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -3507,6 +3508,54 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             code: 'vision-discovery-failed',
             message: error instanceof Error ? error.message : String(error),
             details: { baseURL },
+          })
+        }
+      },
+    },
+
+    // Thin delegation to the optional tunnel service: without it the roster
+    // reads empty and the verbs name the reason (never a bare `internal`).
+    remote: {
+      list(request) {
+        return Promise.resolve(ok(request, { devices: ctx.get('remoteTunnels')?.list() ?? [] }))
+      },
+
+      async connect(request) {
+        const tunnels = ctx.get('remoteTunnels')
+        if (tunnels === undefined) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: 'the remote-tunnels service is not composed in this build.',
+            details: { id: request.payload.id },
+          })
+        }
+        try {
+          return ok(request, { device: await tunnels.connect(request.payload.id) })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { id: request.payload.id },
+          })
+        }
+      },
+
+      async disconnect(request) {
+        const tunnels = ctx.get('remoteTunnels')
+        if (tunnels === undefined) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: 'the remote-tunnels service is not composed in this build.',
+            details: { id: request.payload.id },
+          })
+        }
+        try {
+          return ok(request, { device: await tunnels.disconnect(request.payload.id) })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { id: request.payload.id },
           })
         }
       },

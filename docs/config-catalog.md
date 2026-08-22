@@ -930,7 +930,7 @@ export interface Config {
   defaultContextWindow?: number
   /** Advisory models shown by discovery consumers; defaults to V4 Flash and V4 Pro. */
   models?: DeepSeekCatalogModel[]
-  /** Maximum provider idle time while one stream read is outstanding (default five minutes). */
+  /** Maximum provider idle time while one stream read is outstanding (default ten minutes). */
   streamIdleTimeoutMs?: number
   /** Maximum accumulated base64 image payload per request (default 20 MiB). */
   maxRequestImageBytes?: number
@@ -1554,6 +1554,48 @@ export type Config = LocalConfig
 Depends on: [`LocalConfig`](#deepseek-aidsh-pwsh-local)
 
 Source: [`packages/shell/pwsh-sandbox/src/index.ts:40`](../packages/shell/pwsh-sandbox/src/index.ts)
+
+<a id="deepseek-aidsh-remote-tunnels"></a>
+
+## `@deepseek-ai/dsh-remote-tunnels`
+
+Requires: `subprocess`
+
+```ts config-catalog
+/** Plugin config; every key is also valid inside the `remote` settings section. */
+export interface Config {
+  /** The device roster, in display order. */
+  devices?: RemoteDeviceConfig[]
+  /** First reconnect delay after an unexpected exit. Defaults to {@link DEFAULT_RECONNECT_INITIAL_MS}. */
+  reconnectInitialMs?: number
+  /** Reconnect backoff cap. Defaults to {@link DEFAULT_RECONNECT_MAX_MS}. */
+  reconnectMaxMs?: number
+  /** Delay between readiness probes. Defaults to {@link DEFAULT_PROBE_INTERVAL_MS}. */
+  probeIntervalMs?: number
+  /** HTTP budget of one readiness probe. Defaults to {@link DEFAULT_PROBE_TIMEOUT_MS}. */
+  probeTimeoutMs?: number
+  /** SIGTERM grace before SIGKILL. Defaults to {@link DEFAULT_TERMINATE_GRACE_MS}. */
+  terminateGraceMs?: number
+}
+
+/** One remote device in the roster. */
+export interface RemoteDeviceConfig {
+  /** Stable id naming the device in errors and RPC calls. */
+  id: string
+  /** Display name; the card falls back to `id` when unset. */
+  label?: string
+  /** ssh destination — a `~/.ssh/config` alias or `user@host`; host, port, user, and key all live in ssh configuration. */
+  sshTarget: string
+  /** Web port the remote dsh listens on. Defaults to {@link DEFAULT_REMOTE_PORT}. */
+  remotePort?: number
+  /** Loopback port the tunnel binds here. Defaults to the next free slot from {@link AUTO_LOCAL_PORT_BASE}. */
+  localPort?: number
+  /** True connects the tunnel as soon as the roster entry appears. Defaults to false. */
+  autoConnect?: boolean
+}
+```
+
+Source: [`packages/remote/remote-tunnels/src/index.ts:71`](../packages/remote/remote-tunnels/src/index.ts)
 
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -3152,7 +3194,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/bundle/web-app/src/index.ts:42`](../packages/bundle/web-app/src/index.ts)
+Source: [`packages/bundle/web-app/src/index.ts:95`](../packages/bundle/web-app/src/index.ts)
 
 <a id="deepseek-aidsh-web-fetch-http"></a>
 
@@ -3314,6 +3356,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-permission-presets` ([`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-plan` ([`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-reference` ([`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-remote` ([`packages/client/ui-remote/src/index.ts`](../packages/client/ui-remote/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-renderer` ([`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings` ([`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-general` ([`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts))

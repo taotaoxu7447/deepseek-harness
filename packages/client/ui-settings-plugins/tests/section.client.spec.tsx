@@ -19,6 +19,8 @@ import { PluginsSettingsSection } from '../src/client/PluginsSettingsSection.tsx
 import type { PluginsSettingsSectionProps, PluginsSettingsTabEntry } from '../src/client/PluginsSettingsSection.tsx'
 import { VisionCard } from '../src/client/VisionCard.tsx'
 import type { VisionCardProps } from '../src/client/VisionCard.tsx'
+import { RemoteCard } from '../src/client/RemoteCard.tsx'
+import type { RemoteCardProps } from '../src/client/RemoteCard.tsx'
 import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
 import type { WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
@@ -26,6 +28,7 @@ import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
 import type { VisionCardState } from '../src/client/vision-card-controller.ts'
+import type { RemoteCardState } from '../src/client/remote-card-controller.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
@@ -500,7 +503,7 @@ describe('VisionCard', () => {
         { id: 'emptyref', baseURL: 'https://c.test/v1', apiKeyEnv: '' },
       ],
       [],
-      { probes: [], credentials: [], rowKeys: [] },
+      { probes: [], credentials: [], rowKeys: [], rowConfigured: [] },
     )
 
     // The key label names the declared reference, or the derived default.
@@ -822,5 +825,143 @@ describe('VisionCard chain editing', () => {
     expect(face.editMaxTokens).toHaveBeenCalledWith('4k')
     expect(face.discard).toHaveBeenCalledOnce()
     expect(face.save).toHaveBeenCalledOnce()
+  })
+})
+
+function remoteFace() {
+  return {
+    editRow: vi.fn(),
+    editRowPort: vi.fn(),
+    removeRow: vi.fn(),
+    addRow: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    openExternal: vi.fn(),
+    openHere: vi.fn(),
+    save: vi.fn(),
+    discard: vi.fn(),
+    setPolling: vi.fn(),
+  }
+}
+
+describe('RemoteCard', () => {
+  function renderRemote(
+    rows: RemoteCardState['rows'],
+    tunnels: RemoteCardState['tunnels'],
+    state: Partial<RemoteCardState> = {},
+  ) {
+    const store = createSnapshotStore<RemoteCardState>({
+      ...settled,
+      invalid: false,
+      rows,
+      rowPorts: rows.map(() => ({ remotePort: '', localPort: '' })),
+      tunnels,
+      ...state,
+    })
+    const face = remoteFace()
+    const props = { ...face, t, useRemoteCard: bindSnapshotSelector(store) } as unknown as RemoteCardProps
+    render(<RemoteCard {...props} />)
+    fireEvent.click(screen.getByText(en.remoteTitle))
+    return face
+  }
+
+  it('starts the tunnel poll on mount and stops it on unmount', () => {
+    const face = renderRemote([], [])
+    expect(face.setPolling).toHaveBeenCalledWith(true)
+    cleanup()
+    expect(face.setPolling).toHaveBeenCalledWith(false)
+  })
+
+  it('shows the empty line when the roster is empty', () => {
+    renderRemote([], [])
+    expect(screen.getByText(en.remoteEmpty)).toBeTruthy()
+  })
+
+  it('renders blank port drafts when the poll state has none for a row', () => {
+    renderRemote([{ id: 'work' }], [undefined], { rowPorts: [] })
+
+    expect(screen.getByLabelText(en.remoteRemotePort)).toHaveProperty('value', '')
+    expect(screen.getByLabelText(en.remoteLocalPort)).toHaveProperty('value', '')
+  })
+
+  it('renders each row with its phase pill, detail line, and ready actions', () => {
+    const face = renderRemote(
+      [{ id: 'work', label: 'Work', sshTarget: 'work' }, { id: 'hk' }, { id: 'nas' }, { id: 'vm' }, { id: 'pi' }],
+      [
+        { id: 'work', tunnel: 'ready', url: 'http://127.0.0.1:13389/' },
+        { id: 'hk', tunnel: 'failed', detail: 'permission denied (publickey)' },
+        { id: 'nas', tunnel: 'connecting' },
+        undefined,
+        { id: 'pi', tunnel: 'disconnected' },
+      ],
+    )
+
+    // A labeled row titles on the label with the id alongside; a bare row titles on the id.
+    expect(screen.getByText('Work')).toBeTruthy()
+    expect(screen.getByText('· work')).toBeTruthy()
+    expect(screen.getByText('hk')).toBeTruthy()
+
+    expect(screen.getByText(en.remoteStateReady)).toBeTruthy()
+    expect(screen.getByText(en.remoteStateConnecting)).toBeTruthy()
+    expect(screen.getByText(en.remoteStateUnknown)).toBeTruthy()
+    expect(screen.getByText(en.remoteStateDisconnected)).toBeTruthy()
+    expect(screen.getByText('permission denied (publickey)')).toBeTruthy()
+
+    // Only the ready row offers its tunneled address, both ways out.
+    const link = screen.getByRole('link', { name: en.remoteOpenExternal })
+    expect(link.getAttribute('href')).toBe('http://127.0.0.1:13389/')
+    expect(link.getAttribute('target')).toBe('_blank')
+    fireEvent.click(screen.getByRole('button', { name: en.remoteOpenHere }))
+    expect(face.openHere).toHaveBeenCalledWith(0)
+
+    // The verb follows the phase: the ready and connecting rows offer
+    // Disconnect, the rest offer Connect.
+    fireEvent.click(screen.getAllByRole('button', { name: en.remoteDisconnect })[0]!)
+    expect(face.disconnect).toHaveBeenCalledWith(0)
+    fireEvent.click(screen.getAllByRole('button', { name: en.remoteConnect })[0]!)
+    expect(face.connect).toHaveBeenCalledWith(1)
+  })
+
+  it('stages field edits through the face', () => {
+    const face = renderRemote(
+      [{ id: 'work', label: 'Work', sshTarget: 'work', autoConnect: false }],
+      [undefined],
+    )
+
+    fireEvent.change(screen.getByLabelText(en.remoteId), { target: { value: 'work-2' } })
+    fireEvent.change(screen.getByLabelText(en.remoteLabel), { target: { value: 'Office' } })
+    fireEvent.change(screen.getByLabelText(en.remoteSshTarget), { target: { value: 'office' } })
+    fireEvent.change(screen.getByLabelText(en.remoteRemotePort), { target: { value: '3090' } })
+    fireEvent.change(screen.getByLabelText(en.remoteLocalPort), { target: { value: '14000' } })
+    fireEvent.click(screen.getByLabelText(en.remoteAutoConnect))
+
+    expect(face.editRow.mock.calls).toEqual([
+      [0, 'id', 'work-2'],
+      [0, 'label', 'Office'],
+      [0, 'sshTarget', 'office'],
+      [0, 'autoConnect', true],
+    ])
+    expect(face.editRowPort.mock.calls).toEqual([
+      [0, 'remotePort', '3090'],
+      [0, 'localPort', '14000'],
+    ])
+  })
+
+  it('adds and removes rows through the face', () => {
+    const face = renderRemote([{ id: 'a' }, { id: 'b' }], [undefined, undefined])
+
+    fireEvent.click(screen.getByRole('button', { name: en.remoteAddDevice }))
+    expect(face.addRow).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getAllByRole('button', { name: en.visionRemove })[1]!)
+    expect(face.removeRow).toHaveBeenCalledWith(1)
+  })
+
+  it('routes the footer save and discard through the face', () => {
+    const face = renderRemote([{ id: 'work' }], [undefined], { dirty: true })
+
+    fireEvent.click(screen.getByRole('button', { name: en.save }))
+    fireEvent.click(screen.getByRole('button', { name: en.discard }))
+    expect(face.save).toHaveBeenCalledOnce()
+    expect(face.discard).toHaveBeenCalledOnce()
   })
 })

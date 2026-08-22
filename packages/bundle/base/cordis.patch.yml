@@ -115,6 +115,13 @@
     - id: vision-qwen
       name: '@deepseek-ai/dsh-vision-qwen'
 
+    # The remote-device roster stays idle until the `remote` settings section
+    # (the Web Plugins page's Remote card) or this entry names a device; each
+    # one is an SSH local forward to that host's dsh web UI, lifecycle-managed
+    # by the tunnel service (reconnect with backoff, fatal-exit classification).
+    - id: remote-tunnels
+      name: '@deepseek-ai/dsh-remote-tunnels'
+
     # Full-text session search is opt-in. `openAt: never` keeps
     # ctx.sessionQuery mounted — exact reads, titles, and lineage traces
     # (session export, subagent-fork Workspace inheritance) stay available —

@@ -14,6 +14,7 @@ import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
 import type { VisionApi } from './vision.ts'
+import type { RemoteApi } from './remote.ts'
 import type { SubagentsApi } from './subagents.ts'
 import type { RpcResponse } from './rpc.ts'
 
@@ -76,6 +77,9 @@ export interface RpcMethodMap {
   'llm.models': LlmApi['models']
   'llm.discoverModels': LlmApi['discoverModels']
   'vision.discoverModels': VisionApi['discoverModels']
+  'remote.list': RemoteApi['list']
+  'remote.connect': RemoteApi['connect']
+  'remote.disconnect': RemoteApi['disconnect']
 }
 
 /** Business request payload of method K (reaches through the RpcRequest narrow form to payload). */

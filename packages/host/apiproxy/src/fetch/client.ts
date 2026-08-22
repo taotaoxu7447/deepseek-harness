@@ -63,6 +63,11 @@ import {
 import { llmDiscoverModelsValueSchema, llmModelsValueSchema, llmProvidersValueSchema } from '../api/llm.schema.ts'
 import { visionDiscoverModelsValueSchema } from '../api/vision.schema.ts'
 import {
+  remoteConnectValueSchema,
+  remoteDisconnectValueSchema,
+  remoteListValueSchema,
+} from '../api/remote.schema.ts'
+import {
   subagentHistoryValueSchema,
   subagentInterruptValueSchema,
   subagentListValueSchema,
@@ -165,6 +170,11 @@ export interface IApiClient {
   vision: {
     discoverModels(payload: RequestPayload<'vision.discoverModels'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'vision.discoverModels'>>>
   }
+  remote: {
+    list(payload: RequestPayload<'remote.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'remote.list'>>>
+    connect(payload: RequestPayload<'remote.connect'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'remote.connect'>>>
+    disconnect(payload: RequestPayload<'remote.disconnect'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'remote.disconnect'>>>
+  }
   /** client-response passthrough (rpcId is a backfill of the server-request's id — never minted here). */
   respond(message: ClientResponse, signal?: AbortSignal): Promise<RpcReceipt>
 }
@@ -227,6 +237,9 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'llm.models': llmModelsValueSchema,
   'llm.discoverModels': llmDiscoverModelsValueSchema,
   'vision.discoverModels': visionDiscoverModelsValueSchema,
+  'remote.list': remoteListValueSchema,
+  'remote.connect': remoteConnectValueSchema,
+  'remote.disconnect': remoteDisconnectValueSchema,
 }
 
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
@@ -507,6 +520,12 @@ export abstract class AbstractApiClient implements IApiClient {
 
   readonly vision: IApiClient['vision'] = {
     discoverModels: (payload, signal) => this.callUnary('vision.discoverModels', payload, signal),
+  }
+
+  readonly remote: IApiClient['remote'] = {
+    list: (payload, signal) => this.callUnary('remote.list', payload, signal),
+    connect: (payload, signal) => this.callUnary('remote.connect', payload, signal),
+    disconnect: (payload, signal) => this.callUnary('remote.disconnect', payload, signal),
   }
 
   readonly events: IApiClient['events'] = {

@@ -48,6 +48,10 @@ export type {
 } from '@deepseek-ai/dsh-client-connection/client'
 export type {} from '@deepseek-ai/dsh-api-gateway/client'
 export type {} from '@deepseek-ai/dsh-cordis-host-runner/remote'
+// Browser-side helpers over the `remote` RPC domain shared by the surfaces
+// that poll it (the settings card and the sidebar entry).
+export { createPollFold, listRemoteDevices, parseRemotePort, remoteTunnelFields } from './remote-poll.ts'
+export type { ListedRemoteDevice, RemoteApi } from './remote-poll.ts'
 
 // The payload vocabulary of the selected namespaces, re-exported so a Client
 // contribution can name what it sends and receives without importing a Host
