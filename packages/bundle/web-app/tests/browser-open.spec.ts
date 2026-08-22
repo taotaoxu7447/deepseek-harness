@@ -9,7 +9,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
-import { apply, internals } from '../src/index.ts'
+import { apply, HEALTH_PATH, internals } from '../src/index.ts'
 
 const contexts: Context[] = []
 const tempRoots: string[] = []
@@ -97,5 +97,18 @@ describe('web app browser startup', () => {
 
     expect(openedUrl).toBe(`http://127.0.0.1:${String(ctx.webServer.port)}`)
     expect(openedStatus).toBe(200)
+
+    // The supervisor health route answers over the real listener: a shell can
+    // learn the process/build timestamps before offering a restart.
+    const healthUrl = new URL(HEALTH_PATH, openedUrl)
+    const health = await fetch(healthUrl)
+    expect(health.status).toBe(200)
+    const body = await health.json() as { startedAt: number; builtAt: number | null; stale: boolean }
+    expect(body.startedAt).toBeGreaterThan(0)
+    // The checkout may or may not carry a build record (CI coverage runs pre-build).
+    expect(body.builtAt === null || Number.isFinite(body.builtAt)).toBe(true)
+    expect(body.stale).toBe(body.builtAt !== null && body.builtAt > body.startedAt)
+    const denied = await fetch(healthUrl, { method: 'POST' })
+    expect(denied.status).toBe(405)
   })
 })

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-macos-shell-server-freshness.md
+2026-08-21-macos-shell-server-freshness.md: fd8190a1870b4d320d22f0d5c11c9c3987da1f52
+2026-08-21-macos-shell-server-freshness.zh.md: 564b7814f74b265f4d4274c6bab6c7afbe493b81

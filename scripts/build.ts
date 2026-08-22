@@ -40,7 +40,11 @@ function main(): void {
     ...process.env,
     DSH_CLIENT_COMMIT_HASH: repositoryCommitHash(root, process.env),
   }
-  const clientEnvironment = resolveClientBuildEnvironment(parentEnvironment, values.profile)
+  // Fork deployment default: this tree is distributed as the official-branded
+  // build, so an unselected profile means 'official' here (upstream defaults
+  // to the unbranded local-build presentation). `--profile` or
+  // DSH_BUILD_CLIENT_PROFILE still win.
+  const clientEnvironment = resolveClientBuildEnvironment(parentEnvironment, values.profile ?? 'official')
   const buildEnvironment = clientBuildProcessEnvironment(parentEnvironment, clientEnvironment)
 
   rmSync(resolve(root, CLIENT_BUILD_RECORD_PATH), { force: true })

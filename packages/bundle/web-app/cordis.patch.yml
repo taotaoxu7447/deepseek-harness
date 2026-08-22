@@ -284,6 +284,11 @@
     - id: ui-settings-plugins
       name: '@deepseek-ai/dsh-client-ui-settings-plugins'
 
+    # Remote entry: the sidebar footer trigger + device modal over the remote
+    # RPC domain; ready tunnels open as window tabs or new app windows.
+    - id: ui-remote
+      name: '@deepseek-ai/dsh-client-ui-remote'
+
     # Plan control: the composer plan seat over the plan projection + /plan channel.
     - id: ui-plan
       name: '@deepseek-ai/dsh-client-ui-plan'

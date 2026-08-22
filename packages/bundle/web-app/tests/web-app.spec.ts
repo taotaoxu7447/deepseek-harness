@@ -7,7 +7,7 @@
 
 import { EventEmitter } from 'node:events'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -15,8 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
-import { apply, Config, internals } from '../src/index.ts'
+import type { WebRoute, WebServer } from '@deepseek-ai/dsh-host-webserver'
+import { apply, Config, HEALTH_PATH, internals, serverHealth } from '../src/index.ts'
 
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
@@ -44,12 +44,14 @@ afterEach(() => {
   vi.unstubAllEnvs()
   internals.resolveDistIndex = originalResolve
   internals.openBrowser = originalOpenBrowser
+  internals.lastBuildAt = originalLastBuildAt
   if (dist !== undefined) rmSync(dist, { recursive: true, force: true })
   dist = undefined
 })
 
 const originalResolve = internals.resolveDistIndex
 const originalOpenBrowser = internals.openBrowser
+const originalLastBuildAt = internals.lastBuildAt
 
 type BrowserLauncher = ChildProcess & { stderr: PassThrough }
 
@@ -68,19 +70,28 @@ function stageDist(): string {
   return index
 }
 
-/** A fake webServer capturing the fallback seat and index taps. */
-function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown } {
+/** A fake webServer capturing the fallback seat, index taps, and named routes. */
+function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): {
+  server: WebServer
+  seat: () => unknown
+  routes: Map<string, WebRoute['handler']>
+} {
   let fallback: unknown
+  const routes = new Map<string, WebRoute['handler']>()
   const server = {
     host,
     port: 4567,
+    register: (route: WebRoute) => {
+      routes.set(route.path, route.handler)
+      return () => { routes.delete(route.path) }
+    },
     registerFallback: (handler: unknown) => {
       fallback = handler
       return () => { fallback = undefined }
     },
     applyIndexTaps: (html: string) => html,
   } as unknown as WebServer
-  return { server, seat: () => fallback }
+  return { server, seat: () => fallback, routes }
 }
 
 /** A fake Loader whose settlement the test controls (the URL line waits on it). */
@@ -374,5 +385,80 @@ describe('web-app runtime glue', () => {
     errored.emit('error', new Error('spawn failed'))
     await errorAssertion
     expect(errored.listenerCount('close')).toBe(0)
+  })
+})
+
+/** A minimal ServerResponse capturing the status line and body. */
+function fakeResponse(): { writeHead: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> } {
+  return { writeHead: vi.fn(), end: vi.fn() }
+}
+
+describe('supervisor health route', () => {
+  it('computes staleness from the two timestamps', () => {
+    expect(serverHealth(1000, 2000)).toEqual({ startedAt: 1000, builtAt: 2000, stale: true })
+    expect(serverHealth(2000, 2000)).toEqual({ startedAt: 2000, builtAt: 2000, stale: false })
+    expect(serverHealth(3000, 2000)).toEqual({ startedAt: 3000, builtAt: 2000, stale: false })
+    expect(serverHealth(1000, null)).toEqual({ startedAt: 1000, builtAt: null, stale: false })
+  })
+
+  it('reads the build record mtime and reports a recordless root as never stale', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-web-app-build-'))
+    try {
+      expect(originalLastBuildAt(root)).toBeNull()
+      mkdirSync(join(root, '.dsh-build'))
+      const record = join(root, '.dsh-build', 'client-build-environment.json')
+      writeFileSync(record, '{}')
+      utimesSync(record, new Date(1_700_000_000_000), new Date(1_700_000_000_000))
+      expect(originalLastBuildAt(root)).toBe(1_700_000_000_000)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('answers GET with the process and build timestamps, and disposes its registration', async () => {
+    stageDist()
+    internals.lastBuildAt = () => null
+    const ctx = new Context()
+    const { server, routes } = fakeHttpServer()
+    ctx.provide('webServer', server)
+    apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: false, trustedHosts: [] }))
+    // Settle the invariant companions before touching the route or disposing.
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const handler = routes.get(HEALTH_PATH)
+    if (handler === undefined) throw new Error('health route not registered')
+
+    const res = fakeResponse()
+    void handler({ method: 'GET' } as never, res as never)
+    expect(res.writeHead).toHaveBeenCalledWith(200, { 'content-type': 'application/json' })
+    const body = JSON.parse(String(vi.mocked(res.end).mock.calls[0]?.[0])) as Record<string, unknown>
+    expect(body.builtAt).toBeNull()
+    expect(body.stale).toBe(false)
+    expect(typeof body.startedAt).toBe('number')
+
+    await ctx.fiber.dispose()
+    expect(routes.has(HEALTH_PATH)).toBe(false)
+  })
+
+  it('reports a newer on-disk build as stale and rejects non-GET verbs', async () => {
+    stageDist()
+    internals.lastBuildAt = () => Date.now() + 60_000
+    const ctx = new Context()
+    const { server, routes } = fakeHttpServer()
+    ctx.provide('webServer', server)
+    apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: false, trustedHosts: [] }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const handler = routes.get(HEALTH_PATH)
+    if (handler === undefined) throw new Error('health route not registered')
+
+    const res = fakeResponse()
+    void handler({ method: 'GET' } as never, res as never)
+    const body = JSON.parse(String(vi.mocked(res.end).mock.calls[0]?.[0])) as Record<string, unknown>
+    expect(body.stale).toBe(true)
+    expect(body.builtAt).toBeGreaterThan(body.startedAt as number)
+
+    const denied = fakeResponse()
+    void handler({ method: 'POST' } as never, denied as never)
+    expect(denied.writeHead).toHaveBeenCalledWith(405, { allow: 'GET' })
+    await ctx.fiber.dispose()
   })
 })

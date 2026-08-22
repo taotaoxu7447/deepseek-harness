@@ -12,8 +12,10 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { networkInterfaces } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -31,6 +33,57 @@ export const name = 'web-app'
 
 /** This dsh installation's root, from either this package's source or built entry. */
 const SOURCE_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
+
+/**
+ * Supervisor health endpoint: an exact GET route answering whether the on-disk
+ * build postdates this process, so an outer shell (the macOS app) can offer a
+ * restart instead of silently serving the previous build forever.
+ */
+export const HEALTH_PATH = '/__dsh_health'
+
+/**
+ * Repo-relative path of the complete-build record. The format owner is
+ * `scripts/client-build-environment.ts`; the record sits outside `lib/`
+ * because it certifies both Vite and tsdown artifacts, so a package cannot
+ * import the constant across the source/artifact plane and keeps this mirror.
+ */
+const BUILD_RECORD_PATH = '.dsh-build/client-build-environment.json'
+
+/** Process-lifecycle facts a supervisor compares before offering a restart. */
+export interface ServerHealth {
+  /** Process start time in epoch milliseconds. */
+  startedAt: number
+  /** Last complete build's time in epoch milliseconds; null when no checkout build record exists. */
+  builtAt: number | null
+  /** True only when a complete build finished after this process started. */
+  stale: boolean
+}
+
+/**
+ * Fold the two timestamps into the supervisor payload.
+ * @param startedAt - process start time in epoch milliseconds.
+ * @param builtAt - build record mtime in epoch milliseconds, or null when absent.
+ * @returns the health payload; a missing record is never stale.
+ */
+export function serverHealth(startedAt: number, builtAt: number | null): ServerHealth {
+  return { startedAt, builtAt, stale: builtAt !== null && builtAt > startedAt }
+}
+
+/**
+ * Read the last complete build's time from the record's modification time.
+ * @param root - this installation's root ({@link SOURCE_ROOT} in production).
+ * @returns the record mtime in epoch milliseconds, or null without a record.
+ */
+function lastBuildAt(root: string): number | null {
+  try {
+    return statSync(join(root, BUILD_RECORD_PATH)).mtimeMs
+  } catch {
+    // No build record: an installed deployment outside a checkout never has
+    // one, and stat failures (permissions, a record mid-rewrite) must not
+    // break the health answer — unknown is reported as not stale.
+    return null
+  }
+}
 
 /** Runtime service that releases Web rows after bind-dependent values resolve. */
 const WEB_RUNTIME_SERVICE = 'webRuntime'
@@ -211,11 +264,12 @@ async function openBrowser(url: string): Promise<void> {
   })
 }
 
-/** Test hooks for the built dist and native browser handoff; production never mutates them. */
+/** Test hooks for the built dist, the build-record read, and native browser handoff; production never mutates them. */
 export const internals: {
   resolveDistIndex: () => string
+  lastBuildAt: (root: string) => number | null
   openBrowser: (url: string) => Promise<void>
-} = { resolveDistIndex, openBrowser }
+} = { resolveDistIndex, lastBuildAt, openBrowser }
 
 /**
  * Mount the Web runtime: dist serving, surface prompt, the bash runtime
@@ -225,6 +279,24 @@ export const internals: {
  */
 export function apply(ctx: Context, config: Config): void {
   const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts)
+  // Process start, not plugin activation: a build that lands mid-boot still
+  // postdates the image this process loaded.
+  const startedAt = Math.round(Date.now() - process.uptime() * 1000)
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: HEALTH_PATH,
+    handler: (req, res) => {
+      if (req.method !== 'GET') {
+        res.writeHead(405, { allow: 'GET' })
+        res.end()
+        return
+      }
+      // The build record is read per request: a build landing while this
+      // server runs must flip `stale` without a restart.
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(serverHealth(startedAt, internals.lastBuildAt(SOURCE_ROOT))))
+    },
+  }), `web-app: ${HEALTH_PATH} route`)
   // The loopback URL belongs to this host. Under SSH, the operator reaches it
   // through a local forwarding address that this process cannot derive.
   const handoffBrowser = config.openBrowser && !launchedThroughSsh(ctx)
