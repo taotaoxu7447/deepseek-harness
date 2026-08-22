@@ -575,6 +575,20 @@ export interface Config {
 
 Source: [`packages/credentials/credentials-local/src/index.ts:64`](../packages/credentials/credentials-local/src/index.ts)
 
+<a id="deepseek-aidsh-deepseek-balance"></a>
+
+## `@deepseek-ai/dsh-deepseek-balance`
+
+```ts config-catalog
+/** Configuration for the official balance service. */
+export interface Config {
+  /** Whether the composer capsule is shown. Defaults to on; the sidebar toggle writes this. */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/remote/deepseek-balance/src/index.ts:36`](../packages/remote/deepseek-balance/src/index.ts)
+
 <a id="deepseek-aidsh-e2b"></a>
 
 ## `@deepseek-ai/dsh-e2b`
@@ -3098,6 +3112,28 @@ export type ApprovalPolicy = 'ask' | 'never'
 
 Source: [`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
 
+<a id="deepseek-aidsh-v4-monitor"></a>
+
+## `@deepseek-ai/dsh-v4-monitor`
+
+```ts config-catalog
+/** Configuration for the local V4 monitor service. */
+export interface Config {
+  /** Whether the composer dock is shown. Defaults to false; the sidebar toggle writes this. */
+  enabled?: boolean
+  /** The ds-dash monitor endpoint URL. */
+  monitorUrl?: string
+  /** Invite passcode sent in the `X-Dash-Pass` header. Empty until the user supplies one. */
+  passcode?: string
+  /** Polling interval in ms when the dock is shown. Defaults to 2000. */
+  pollIntervalMs?: number
+  /** Whether the dock status bar defaults to collapsed. */
+  autoCollapse?: boolean
+}
+```
+
+Source: [`packages/remote/v4-monitor/src/index.ts:29`](../packages/remote/v4-monitor/src/index.ts)
+
 <a id="deepseek-aidsh-vision"></a>
 
 ## `@deepseek-ai/dsh-vision`
@@ -3379,6 +3415,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-commands` ([`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-conversation` ([`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-cordis` ([`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-deepseek-balance` ([`packages/client/ui-deepseek-balance/src/index.ts`](../packages/client/ui-deepseek-balance/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-deliverables` — requires `systemPrompt` ([`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse` ([`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-native` ([`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts))
@@ -3405,6 +3442,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-tool` ([`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-trajectory` ([`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-v4-monitor` ([`packages/client/ui-v4-monitor/src/index.ts`](../packages/client/ui-v4-monitor/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))

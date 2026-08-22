@@ -90,6 +90,30 @@ async disconnect(id: string): Promise<RemoteDeviceView>
 
 Source: [`packages/remote/remote-tunnels/src/index.ts`](../../packages/remote/remote-tunnels/src/index.ts)
 
+<a id="ctxv4monitor--v4monitorservice"></a>
+
+### `ctx.v4Monitor` — `V4MonitorService`
+
+Service managing DeepSeek V4 Flash live state fetches.
+
+```ts cordis-catalog
+/**
+ * Fetch current V4 cluster state from the monitor endpoint.
+ * @param force - whether to bypass cache and fetch immediately.
+ * @param signal - optional cancellation signal.
+ * @returns latest cluster monitoring snapshot, or null if disabled/unreachable.
+ */
+async fetchState(force: boolean = false, signal?: AbortSignal): Promise<V4MonitorState | null>
+
+/**
+ * Get the last recorded state.
+ * @returns the cached monitoring state snapshot, if any.
+ */
+getLastState(): V4MonitorState | null
+```
+
+Source: [`packages/remote/v4-monitor/src/index.ts`](../../packages/remote/v4-monitor/src/index.ts)
+
 <a id="ctxwebserver--webserver"></a>
 
 ### `ctx.webServer` — `WebServer`

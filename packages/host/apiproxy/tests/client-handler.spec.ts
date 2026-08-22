@@ -30,6 +30,8 @@ function scriptedApi(overrides: {
   llm?: Partial<ApiProxy['llm']>
   vision?: Partial<ApiProxy['vision']>
   remote?: Partial<ApiProxy['remote']>
+  v4Monitor?: Partial<ApiProxy['v4Monitor']>
+  balance?: Partial<ApiProxy['balance']>
   respond?: ApiProxy['respond']
 } = {}): ApiProxy {
   async function *empty<F>(): AsyncGenerator<RpcRequest<F>> { /* no frames */ }
@@ -139,6 +141,14 @@ function scriptedApi(overrides: {
       connect: err,
       disconnect: err,
       ...overrides.remote,
+    },
+    v4Monitor: {
+      state: r => ok(r, { state: null }),
+      ...overrides.v4Monitor,
+    },
+    balance: {
+      get: r => ok(r, { balance: null }),
+      ...overrides.balance,
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),

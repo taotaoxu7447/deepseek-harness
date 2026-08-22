@@ -79,6 +79,7 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
       revision: undefined,
       writable: false,
       mode: persistence,
+      secrets: [],
     })
     if (persistence === 'host') {
       this.unsubscribe = mirror.subscribe(() => { this.derive() })
@@ -200,6 +201,7 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
       draft.base = view.base
       draft.user = view.user
       draft.writable = writable
+      draft.secrets = view.secrets ?? []
       if (decoded === undefined) return
       draft.status = 'ready'
       draft.value = decoded

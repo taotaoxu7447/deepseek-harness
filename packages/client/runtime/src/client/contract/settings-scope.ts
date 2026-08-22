@@ -34,6 +34,12 @@ export interface SettingsScopeSnapshot<T> {
   writable: boolean
   /** `host` syncs with the Host document; `memory` keeps a remote browser process-local. */
   mode: 'host' | 'memory'
+  /**
+   * Schema-declared secret slots after redaction. Presence of `set: true`
+   * is how a form learns a write-only field is configured without receiving
+   * the secret itself.
+   */
+  secrets: readonly { path: readonly string[]; set: boolean }[]
 }
 
 /** Domain-owned description of one settings namespace consumed by a browser plugin. */

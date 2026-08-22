@@ -41,7 +41,7 @@ import type {
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
-  WorkspaceId, WorkspaceView,
+  V4MonitorStateView, BalanceView, WorkspaceId, WorkspaceView,
 } from './api/index.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -3541,6 +3541,38 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             message: error instanceof Error ? error.message : String(error),
             details: { id: request.payload.id },
           })
+        }
+      },
+    },
+
+    v4Monitor: {
+      async state(request) {
+        const monitor = ctx.get('v4Monitor')
+        if (monitor === undefined) {
+          return Promise.resolve(ok(request, { state: null }))
+        }
+        try {
+          const state = await monitor.fetchState(request.payload.force ?? false)
+          return ok(request, { state: state as unknown as V4MonitorStateView })
+        } catch {
+          return ok(request, { state: null })
+        }
+      },
+    },
+
+    balance: {
+      async get(request) {
+        const service = ctx.get('deepseekBalance') as
+          | { fetchBalance: (force?: boolean) => Promise<BalanceView | null> }
+          | undefined
+        if (service === undefined) {
+          return Promise.resolve(ok(request, { balance: null }))
+        }
+        try {
+          const balance = await service.fetchBalance(request.payload.force ?? false)
+          return ok(request, { balance })
+        } catch {
+          return ok(request, { balance: null })
         }
       },
     },

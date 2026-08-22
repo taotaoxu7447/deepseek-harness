@@ -88,6 +88,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-user-questions': { kind: 'indirect', reason: 'The package mounts dsh-tool-ask-user; that tool owns the model-visible schema and answer rendering.' },
   'packages/client/ui-trajectory': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-remote': { kind: 'none', reason: 'Browser-side remote-device entry over the remote RPC roster; registers nothing model-facing.' },
+  'packages/client/ui-v4-monitor': { kind: 'none', reason: 'Browser-side cluster monitoring dock over the v4Monitor RPC domain; registers nothing model-facing.' },
+  'packages/client/ui-deepseek-balance': { kind: 'none', reason: 'Browser-side official API balance capsule over the balance RPC domain; registers nothing model-facing.' },
   'packages/client/ui-workspace': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-directory-picker-browse': { kind: 'none', reason: 'Browser-side directory-browsing surface; registers nothing model-facing.' },
   'packages/client/ui-directory-picker-native': { kind: 'none', reason: 'Browser-side surface driving the host OS chooser; registers nothing model-facing.' },
@@ -170,6 +172,8 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/vision/vision': { kind: 'indirect', reason: 'The provider registry delegates model rendering to dsh-tool-vision.' },
   'packages/vision/vision-qwen': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-vision; its sidecar describe call never enters main-model requests.' },
   'packages/remote/remote-tunnels': { kind: 'none', reason: 'The SSH tunnel service moves no session content and registers nothing model-facing.' },
+  'packages/remote/v4-monitor': { kind: 'none', reason: 'The cluster monitoring service moves no session content and registers nothing model-facing.' },
+  'packages/remote/deepseek-balance': { kind: 'none', reason: 'The official API balance proxy moves no session content and registers nothing model-facing.' },
   'packages/workflow/workflow': { kind: 'indirect', reason: 'The service delegates parent and child model rendering to its consumer and engine.' },
 }
 

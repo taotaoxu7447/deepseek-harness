@@ -298,6 +298,16 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: false, error: { code: 'remote-tunnel-failed' as const, message: 'nope', details: { id: request.payload.id } } } }
       },
     },
+    v4Monitor: {
+      async state(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { state: null } } }
+      },
+    },
+    balance: {
+      async get(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { balance: null } } }
+      },
+    },
     events: {
       mux: (_request, signal) => stream(muxFrames, signal),
       host: (_request, signal) => stream(hostFrames, signal),

@@ -1,0 +1,21 @@
+/* 28px pill, same radius as the model chip, with a light outline so the
+   amount reads as a capsule instead of a bare number. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+}

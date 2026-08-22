@@ -2253,6 +2253,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'v4Monitor',
+    summary: 'Service managing DeepSeek V4 Flash live state fetches.',
+    description: 'Service managing DeepSeek V4 Flash live state fetches.',
+    methods: [
+      {
+        signature: 'async fetchState(force: boolean = false, signal?: AbortSignal): Promise<V4MonitorState | null>',
+        description: 'Fetch current V4 cluster state from the monitor endpoint.',
+        parameters: [{ name: 'force', description: 'whether to bypass cache and fetch immediately.' }, { name: 'signal', description: 'optional cancellation signal.' }],
+        returns: 'latest cluster monitoring snapshot, or null if disabled/unreachable.',
+      },
+      {
+        signature: 'getLastState(): V4MonitorState | null',
+        description: 'Get the last recorded state.',
+        parameters: [],
+        returns: 'the cached monitoring state snapshot, if any.',
+      },
+    ],
+  },
+  {
     key: 'vision',
     summary: 'The vision service.',
     description: 'The vision service. Registered as `ctx.vision` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `VISION_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `VISION_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `VISION_PROVIDER_UNAVAILABLE`.',
@@ -4994,6 +5013,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UserQuestionProvider',
     declaration: 'export interface UserQuestionProvider {\n    ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>;\n}',
+  },
+  {
+    name: 'V4Engine',
+    declaration: 'export interface V4Engine {\n    healthy: boolean;\n    alias: string;\n    error: string | null;\n}',
+  },
+  {
+    name: 'V4HistoryItem',
+    declaration: 'export interface V4HistoryItem {\n    slot: number;\n    task: number;\n    prompt_tokens: number;\n    decoded: number;\n    duration_s: number;\n    decode_tps_avg: number;\n    end_ts: number;\n}',
+  },
+  {
+    name: 'V4MonitorState',
+    declaration: 'export interface V4MonitorState {\n    ts: number;\n    engine: V4Engine;\n    slots: V4Slot[];\n    history: V4HistoryItem[];\n    age_s: number;\n    stale: boolean;\n}',
+  },
+  {
+    name: 'V4Slot',
+    declaration: 'export interface V4Slot {\n    id: number;\n    state: V4SlotState;\n    task?: number;\n    n_ctx: number;\n    prompt_tokens: number;\n    prompt_processed: number;\n    prefill_progress: number;\n    prefill_tps: number;\n    decode_tps: number;\n    decoded: number;\n    n_remain: number;\n    ctx_usage: number;\n    speculative?: boolean;\n    params?: V4SlotParams;\n}',
+  },
+  {
+    name: 'V4SlotParams',
+    declaration: 'export interface V4SlotParams {\n    temp?: number;\n    top_p?: number;\n    max_tokens?: number;\n}',
+  },
+  {
+    name: 'V4SlotState',
+    declaration: 'export type V4SlotState = \'idle\' | \'prefilling\' | \'decoding\';',
   },
   {
     name: 'VisionDescribeRequest',

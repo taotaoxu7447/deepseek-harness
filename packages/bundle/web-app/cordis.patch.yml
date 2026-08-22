@@ -289,6 +289,12 @@
     - id: ui-remote
       name: '@deepseek-ai/dsh-client-ui-remote'
 
+    # DeepSeek V4 Flash live cluster monitoring dock above composer.
+    - id: ui-v4-monitor
+      name: '@deepseek-ai/dsh-client-ui-v4-monitor'
+    # Official DeepSeek API balance capsule left of the model picker.
+    - id: ui-deepseek-balance
+      name: '@deepseek-ai/dsh-client-ui-deepseek-balance'
     # Plan control: the composer plan seat over the plan projection + /plan channel.
     - id: ui-plan
       name: '@deepseek-ai/dsh-client-ui-plan'

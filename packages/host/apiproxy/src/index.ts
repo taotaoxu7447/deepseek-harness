@@ -91,6 +91,8 @@ export class ApiProxyService extends Service implements ApiProxy {
   readonly llm: ApiProxy['llm']
   readonly vision: ApiProxy['vision']
   readonly remote: ApiProxy['remote']
+  readonly v4Monitor: ApiProxy['v4Monitor']
+  readonly balance: ApiProxy['balance']
   readonly events: ApiProxy['events']
   readonly downloads: ApiProxy['downloads']
   readonly respond: ApiProxy['respond']
@@ -121,6 +123,8 @@ export class ApiProxyService extends Service implements ApiProxy {
     this.llm = api.llm
     this.vision = api.vision
     this.remote = api.remote
+    this.v4Monitor = api.v4Monitor
+    this.balance = api.balance
     this.events = api.events
     this.downloads = api.downloads
     // createApiProxy returns closures (no `this` capture), so the bind is

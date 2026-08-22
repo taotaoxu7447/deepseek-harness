@@ -549,6 +549,22 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns one lifecycle per roster device: spawn ssh -L, probe the forwarded loopback port, supervise with backoff; the apiproxy remote domain reads the roster and delegates the verbs.',
   },
   {
+    key: 'v4Monitor',
+    pkg: 'v4-monitor',
+    title: 'DeepSeek V4 Flash cluster monitoring',
+    mode: 'core',
+    consumers: ['apiproxy'],
+    note: 'Fetches real-time cluster telemetry from ds-dash with passcode authentication; apiproxy bridges state to the conversation dock.',
+  },
+  {
+    key: 'deepseekBalance',
+    pkg: 'deepseek-balance',
+    title: 'Official DeepSeek API account balance',
+    mode: 'core',
+    consumers: ['apiproxy'],
+    note: 'Resolves the official DeepSeek API key on the Host and queries GET /user/balance; apiproxy bridges the snapshot to the composer capsule.',
+  },
+  {
     key: 'webServer',
     pkg: 'webserver',
     title: 'HTTP route registration',

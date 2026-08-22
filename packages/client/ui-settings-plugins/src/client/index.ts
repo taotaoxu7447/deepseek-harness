@@ -28,12 +28,14 @@ import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './
 import { WebSearchCard } from './WebSearchCard.tsx'
 import { VisionCard } from './VisionCard.tsx'
 import { RemoteCard } from './RemoteCard.tsx'
+import { LocalV4Card } from './LocalV4Card.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
 import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
 import { VISION_NS, VisionCardController } from './vision-card-controller.ts'
 import { REMOTE_NS, RemoteCardController } from './remote-card-controller.ts'
+import { LOCAL_V4_NS, LocalV4CardController } from './local-v4-card-controller.ts'
 import { en, zh } from './locales.ts'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
@@ -50,7 +52,9 @@ export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
 export type { VisionCardFace, VisionCardState } from './vision-card-controller.ts'
 export type { RemoteCardFace, RemoteCardState } from './remote-card-controller.ts'
-
+export type { LocalV4CardFace, LocalV4CardState } from './local-v4-card-controller.ts'
+export { LocalV4Card } from './LocalV4Card.tsx'
+export type { LocalV4CardProps } from './LocalV4Card.tsx'
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
 
@@ -71,7 +75,7 @@ export function apply(ctx: ClientContext): void {
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
   const vision = new VisionCardController(ctx.settingsScope.bind({ namespace: VISION_NS }), api)
   const remote = new RemoteCardController(ctx.settingsScope.bind({ namespace: REMOTE_NS }), api)
-
+  const localV4 = new LocalV4CardController(ctx.settingsScope.bind({ namespace: LOCAL_V4_NS }))
   // The credential a card reports is not part of any settings section, so its
   // scope publishes nothing when one is written. This is the only signal that
   // a key written on another surface reached the Host.
@@ -182,5 +186,11 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => remote.inject(),
     }, RemoteCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: LOCAL_V4_NS,
+      locale: NS,
+      inject: () => localV4.inject(),
+    }, LocalV4Card)
   })
 }

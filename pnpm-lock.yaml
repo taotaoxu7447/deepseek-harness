@@ -1048,6 +1048,9 @@ importers:
       '@deepseek-ai/dsh-credentials-local':
         specifier: workspace:^
         version: link:../../credentials/credentials-local
+      '@deepseek-ai/dsh-deepseek-balance':
+        specifier: workspace:^
+        version: link:../../remote/deepseek-balance
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:^
         version: link:../../fs/fs-local
@@ -1225,6 +1228,9 @@ importers:
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:^
         version: link:../../interaction/user-questions
+      '@deepseek-ai/dsh-v4-monitor':
+        specifier: workspace:^
+        version: link:../../remote/v4-monitor
       '@deepseek-ai/dsh-vision':
         specifier: workspace:^
         version: link:../../vision/vision
@@ -1329,6 +1335,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-cordis':
         specifier: workspace:^
         version: link:../../extensions/ui-cordis
+      '@deepseek-ai/dsh-client-ui-deepseek-balance':
+        specifier: workspace:^
+        version: link:../../client/ui-deepseek-balance
       '@deepseek-ai/dsh-client-ui-deliverables':
         specifier: workspace:^
         version: link:../../client/ui-deliverables
@@ -1407,6 +1416,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-user-questions':
         specifier: workspace:^
         version: link:../../client/ui-user-questions
+      '@deepseek-ai/dsh-client-ui-v4-monitor':
+        specifier: workspace:^
+        version: link:../../client/ui-v4-monitor
       '@deepseek-ai/dsh-client-ui-workflow-run':
         specifier: workspace:^
         version: link:../../client/ui-workflow-run
@@ -1961,6 +1973,55 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+
+  packages/client/ui-deepseek-balance:
+    dependencies:
+      clsx:
+        specifier: ^2.0.0
+        version: 2.1.1
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../connection
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:^
+        version: link:../locale
+      '@deepseek-ai/dsh-client-runtime':
+        specifier: workspace:^
+        version: link:../runtime
+      '@deepseek-ai/dsh-client-test-runtime':
+        specifier: workspace:^
+        version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:^
+        version: link:../ui-settings
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        specifier: workspace:^
+        version: link:../ui-sidebar
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:^
+        version: link:../ui-slots
+      '@deepseek-ai/dsh-host-apiproxy':
+        specifier: workspace:^
+        version: link:../../host/apiproxy
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
@@ -3169,6 +3230,55 @@ importers:
       '@deepseek-ai/dsh-user-questions':
         specifier: workspace:^
         version: link:../../interaction/user-questions
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+
+  packages/client/ui-v4-monitor:
+    dependencies:
+      clsx:
+        specifier: ^2.0.0
+        version: 2.1.1
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../connection
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:^
+        version: link:../locale
+      '@deepseek-ai/dsh-client-runtime':
+        specifier: workspace:^
+        version: link:../runtime
+      '@deepseek-ai/dsh-client-test-runtime':
+        specifier: workspace:^
+        version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: workspace:^
+        version: link:../ui-settings
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        specifier: workspace:^
+        version: link:../ui-sidebar
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:^
+        version: link:../ui-slots
+      '@deepseek-ai/dsh-host-apiproxy':
+        specifier: workspace:^
+        version: link:../../host/apiproxy
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
@@ -5995,6 +6105,25 @@ importers:
         specifier: workspace:^
         version: link:../../core/system-prompt
 
+  packages/remote/deepseek-balance:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:^
+        version: link:../../credentials/credentials
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../settings/settings
+
   packages/remote/remote-tunnels:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -6013,6 +6142,22 @@ importers:
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:^
         version: link:../../subprocess/subprocess
+
+  packages/remote/v4-monitor:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../settings/settings
 
   packages/runtime-diagnostics/invariants:
     dependencies:

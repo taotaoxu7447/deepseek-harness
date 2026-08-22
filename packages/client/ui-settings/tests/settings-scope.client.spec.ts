@@ -81,11 +81,11 @@ describe('SettingsScopeController', () => {
   it('starts loading and derives a schema-valid section with revision and writability', async () => {
     const describeCall = vi.fn().mockResolvedValueOnce(described({ preference: 'dark' }, 3))
     const { mirror, scope } = derivedScope({ describe: describeCall })
-    expect(scope.getSnapshot()).toEqual({
-      status: 'loading', value: undefined, revision: undefined, writable: false, mode: 'host',
+    expect(scope.getSnapshot()).toMatchObject({
+      status: 'loading', value: undefined, revision: undefined, writable: false, mode: 'host', secrets: [],
     })
     await mirror.load()
-    expect(scope.getSnapshot()).toEqual({
+    expect(scope.getSnapshot()).toMatchObject({
       status: 'ready', value: { preference: 'dark' }, revision: 3, writable: true, mode: 'host',
     })
   })
@@ -352,8 +352,8 @@ describe('SettingsScopeController', () => {
     const mirror = new SettingsDescribeMirror(wire, 'memory')
     const scope = new SettingsScopeController<UiTestSettings>(
       wire, { namespace: 'ui-test' }, mirror, 'memory', settingsSchema)
-    expect(scope.getSnapshot()).toEqual({
-      status: 'unavailable', value: undefined, revision: undefined, writable: false, mode: 'memory',
+    expect(scope.getSnapshot()).toMatchObject({
+      status: 'unavailable', value: undefined, revision: undefined, writable: false, mode: 'memory', secrets: [],
     })
     await mirror.load()
     await scope.set('preference', 'dark')

@@ -3074,6 +3074,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         details: { id: request.payload.id },
       }),
     },
+    v4Monitor: {
+      state: request => ok(request, { state: null }),
+    },
+    balance: {
+      get: request => ok(request, { balance: null }),
+    },
     respond(message: ClientResponse): Promise<RpcReceipt> {
       // Same routing discipline as the host: rpcId first, then the payload's
       // audit correlation; a settled or unknown id is not-pending.
@@ -3249,6 +3255,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'remote.list': return this.api.remote.list(request)
       case 'remote.connect': return this.api.remote.connect(request)
       case 'remote.disconnect': return this.api.remote.disconnect(request)
+      case 'v4Monitor.state': return this.api.v4Monitor.state(request)
     }
   }
 

@@ -67,6 +67,8 @@ import {
   remoteDisconnectValueSchema,
   remoteListValueSchema,
 } from '../api/remote.schema.ts'
+import { v4MonitorStateValueSchema } from '../api/v4-monitor.schema.ts'
+import { balanceGetValueSchema } from '../api/balance.schema.ts'
 import {
   subagentHistoryValueSchema,
   subagentInterruptValueSchema,
@@ -175,7 +177,12 @@ export interface IApiClient {
     connect(payload: RequestPayload<'remote.connect'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'remote.connect'>>>
     disconnect(payload: RequestPayload<'remote.disconnect'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'remote.disconnect'>>>
   }
-  /** client-response passthrough (rpcId is a backfill of the server-request's id — never minted here). */
+  v4Monitor: {
+    state(payload: RequestPayload<'v4Monitor.state'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'v4Monitor.state'>>>
+  }
+  balance: {
+    get(payload: RequestPayload<'balance.get'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'balance.get'>>>
+  }
   respond(message: ClientResponse, signal?: AbortSignal): Promise<RpcReceipt>
 }
 
@@ -240,6 +247,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'remote.list': remoteListValueSchema,
   'remote.connect': remoteConnectValueSchema,
   'remote.disconnect': remoteDisconnectValueSchema,
+  'v4Monitor.state': v4MonitorStateValueSchema,
+  'balance.get': balanceGetValueSchema,
 }
 
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
@@ -528,6 +537,13 @@ export abstract class AbstractApiClient implements IApiClient {
     disconnect: (payload, signal) => this.callUnary('remote.disconnect', payload, signal),
   }
 
+  readonly v4Monitor: IApiClient['v4Monitor'] = {
+    state: (payload, signal) => this.callUnary('v4Monitor.state', payload, signal),
+  }
+
+  readonly balance: IApiClient['balance'] = {
+    get: (payload, signal) => this.callUnary('balance.get', payload, signal),
+  }
   readonly events: IApiClient['events'] = {
     mux: (payload, signal, onOpen) => this.openMux(payload, signal, onOpen),
     host: (payload, signal, onOpen) => this.openHost(payload, signal, onOpen),

@@ -239,6 +239,14 @@ export class FakeApiClient implements IApiClient {
     }))),
   }
 
+  readonly v4Monitor: IApiClient['v4Monitor'] = {
+    state: payload => this.record('v4Monitor.state', payload, Promise.resolve(ok({ state: null }))),
+  }
+
+  readonly balance: IApiClient['balance'] = {
+    get: payload => this.record('balance.get', payload, Promise.resolve(ok({ balance: null }))),
+  }
+
   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
   suppressStreamOpen = false
 

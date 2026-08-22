@@ -70,6 +70,8 @@ import {
   remoteDisconnectRequestSchema,
   remoteListRequestSchema,
 } from '../api/remote.schema.ts'
+import { v4MonitorStateRequestSchema } from '../api/v4-monitor.schema.ts'
+import { balanceGetRequestSchema } from '../api/balance.schema.ts'
 import {
   subagentHistoryRequestSchema,
   subagentInterruptRequestSchema,
@@ -150,6 +152,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'remote.list': { schema: remoteListRequestSchema, invoke: (api, r) => api.remote.list(r) },
   'remote.connect': { schema: remoteConnectRequestSchema, invoke: (api, r) => api.remote.connect(r) },
   'remote.disconnect': { schema: remoteDisconnectRequestSchema, invoke: (api, r) => api.remote.disconnect(r) },
+  'v4Monitor.state': { schema: v4MonitorStateRequestSchema, invoke: (api, r) => api.v4Monitor.state(r) },
+  'balance.get': { schema: balanceGetRequestSchema, invoke: (api, r) => api.balance.get(r) },
 }
 
 /** Route lookup that narrows an arbitrary path segment to a map key (single cast point for the string→key refinement). */

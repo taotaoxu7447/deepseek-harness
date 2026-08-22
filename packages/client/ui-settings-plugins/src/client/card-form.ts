@@ -329,7 +329,9 @@ export class CardForm<T> {
 
   private async store(field: string, value: unknown): Promise<boolean> {
     await this.scope.set(field, value)
-    return this.userLayer()?.[field] === value
+    if (this.userLayer()?.[field] === value) return true
+    return (this.snapshotOf().secrets ?? []).some(secret =>
+      secret.set && secret.path.length === 1 && secret.path[0] === field)
   }
 
   private stage(field: string, edit: StagedEdit): void {

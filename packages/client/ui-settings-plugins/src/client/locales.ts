@@ -38,7 +38,10 @@ export type PluginsSettingsLocaleKey =
   | 'remoteAutoConnect' | 'remoteAutoConnectHint'
   | 'remoteConnect' | 'remoteDisconnect' | 'remoteOpenExternal' | 'remoteOpenHere'
   | 'remoteStateUnknown' | 'remoteStateDisconnected' | 'remoteStateConnecting' | 'remoteStateReady' | 'remoteStateFailed'
-
+  | 'localV4Title' | 'localV4Description'
+  | 'localV4MonitorUrl' | 'localV4MonitorUrlHint' | 'localV4Passcode' | 'localV4PasscodeHint'
+  | 'localV4PasscodeSet' | 'localV4PasscodeUnset' | 'localV4PollInterval' | 'localV4PollIntervalHint'
+  | 'localV4AutoCollapse' | 'localV4AutoCollapseHint'
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
@@ -163,6 +166,18 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   remoteStateConnecting: 'Connecting\u2026',
   remoteStateReady: 'Connected',
   remoteStateFailed: 'Failed',
+  localV4Title: 'Local compute monitor',
+  localV4Description: 'Live cluster metrics shown above the composer. Turn the strip on or off from the sidebar.',
+  localV4MonitorUrl: 'Monitor service URL',
+  localV4MonitorUrlHint: 'Base URL of the cluster monitoring service.',
+  localV4Passcode: 'Invite code',
+  localV4PasscodeHint: 'Required to connect. Leave blank to keep the current code.',
+  localV4PasscodeSet: 'Invite code configured',
+  localV4PasscodeUnset: 'No invite code configured',
+  localV4PollInterval: 'Polling interval (ms)',
+  localV4PollIntervalHint: 'Live status refresh interval in ms (recommended 2000-5000ms).',
+  localV4AutoCollapse: 'Collapse to compact bar by default',
+  localV4AutoCollapseHint: 'Show as a minimal single-line status capsule by default; click to expand dual slot details.',
 }
 
 /** Simplified Chinese copy. */
@@ -289,4 +304,16 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   remoteStateConnecting: '连接中…',
   remoteStateReady: '已连接',
   remoteStateFailed: '失败',
+  localV4Title: '本地算力监控',
+  localV4Description: '在输入框上方显示集群实时指标。开关在侧栏。',
+  localV4MonitorUrl: '监控服务地址',
+  localV4MonitorUrlHint: '集群监控服务的基址。',
+  localV4Passcode: '邀请码',
+  localV4PasscodeHint: '连接监控所需。留空表示保持当前邀请码。',
+  localV4PasscodeSet: '已配置邀请码',
+  localV4PasscodeUnset: '未配置邀请码',
+  localV4PollInterval: '轮询刷新周期 (ms)',
+  localV4PollIntervalHint: '实时状态刷新周期，建议 2000~5000 毫秒。',
+  localV4AutoCollapse: '默认折叠为单行胶囊',
+  localV4AutoCollapseHint: '开启后状态条默认以极简单行呈现，点击可展开双 Slot 详情。',
 }

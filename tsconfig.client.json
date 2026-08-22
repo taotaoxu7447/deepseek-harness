@@ -86,6 +86,8 @@
     { "path": "./packages/client/ui-plan" },
     { "path": "./packages/client/ui-settings-plugins" },
     { "path": "./packages/client/ui-remote" },
+    { "path": "./packages/client/ui-v4-monitor" },
+    { "path": "./packages/client/ui-deepseek-balance" },
     { "path": "./packages/client/ui-user-questions" },
     { "path": "./packages/client/ui-trajectory" },
     { "path": "./packages/session-query/session-log-export" },

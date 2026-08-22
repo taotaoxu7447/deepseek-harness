@@ -191,6 +191,10 @@ flowchart LR
   pkg_directory_picker_browse["directory-picker-browse"]
   pkg_remote_tunnels["remote-tunnels"]
   svc_remoteTunnels["ctx.remoteTunnels<br/>SSH tunnels to remote dsh hosts"]
+  pkg_v4_monitor["v4-monitor"]
+  svc_v4Monitor["ctx.v4Monitor<br/>DeepSeek V4 Flash cluster monitoring"]
+  pkg_deepseek_balance["deepseek-balance"]
+  svc_deepseekBalance["ctx.deepseekBalance<br/>Official DeepSeek API account balance"]
   pkg_webserver["webserver"]
   svc_webServer["ctx.webServer<br/>HTTP route registration"]
   pkg_connection["connection"]
@@ -233,6 +237,7 @@ flowchart LR
   pkg_cordis_host_runner --> svc_dynamicCordisRunner
   pkg_credentials --> svc_credentials
   pkg_credentials_local --> svc_credentials
+  pkg_deepseek_balance --> svc_deepseekBalance
   pkg_directory_picker --> svc_directoryPicker
   pkg_directory_picker_browse --> svc_directoryPicker
   pkg_directory_picker_native --> svc_directoryPicker
@@ -306,6 +311,7 @@ flowchart LR
   pkg_tools --> svc_tools
   pkg_typert_registry --> svc_typert
   pkg_user_questions --> svc_userQuestions
+  pkg_v4_monitor --> svc_v4Monitor
   pkg_vision --> svc_vision
   pkg_vision_qwen --> svc_vision
   pkg_web --> svc_web
@@ -337,6 +343,7 @@ flowchart LR
   svc_credentials --> pkg_apiproxy
   svc_credentials --> pkg_llm_deepseek
   svc_credentials --> pkg_llm_pi_ai
+  svc_deepseekBalance --> pkg_apiproxy
   svc_directoryPicker --> pkg_apiproxy
   svc_dynamicCordisRunner --> pkg_tool_cordis
   svc_e2b --> pkg_fs_e2b
@@ -425,6 +432,7 @@ flowchart LR
   svc_typert --> pkg_api_gateway
   svc_typert --> pkg_typert_loader
   svc_userQuestions --> pkg_tool_ask_user
+  svc_v4Monitor --> pkg_apiproxy
   svc_vision --> pkg_tool_vision
   svc_web --> pkg_tool_web
   svc_webServer --> pkg_connection
@@ -492,7 +500,9 @@ flowchart LR
 | `ctx.spillStore` | `seam` | [`spill`](../packages/spill/spill) | [`spill-local`](../packages/spill/spill-local) | [`spill-policy`](../packages/spill/spill-policy) | - | 后端保存过大的工具文本，并返回面向模型的定位信息和取回提示；spill-policy 是 tools/post-execute 消费方，负责决定何时 spill。 |
 | `ctx.directoryPicker` | `seam` | `directory-picker` | `directory-picker-native`, `directory-picker-browse` | `apiproxy` | - | 带判别标记的交互能力：原生后端在 Host 显示设备上打开一个操作系统选择器，浏览后端为应用内浏览器提供列表与创建原语；双端后端通过其浏览器侧填充 ui-workspace 目录流程的 slot（不通过协议发布）。 |
 | `ctx.remoteTunnels` | `core` | [`remote-tunnels`](../packages/remote/remote-tunnels) | - | `apiproxy` | - | 为清单中的每台设备维护一条生命周期：spawn ssh -L、探测转发的 loopback 端口、按退避监护；apiproxy 的 remote 域读取清单并委托连接动词。 |
-| `ctx.webServer` | `core` | `webserver` | - | `connection`, `modules`, `hmr` | - | 普通的 node:http 载体：具名路由注册表、索引转换 tap，以及静态 dist 回退；Web 传输插件注册自己的路由。 |
+| `ctx.v4Monitor` | `core` | [`v4-monitor`](../packages/remote/v4-monitor) | - | `apiproxy` | - | 携带口令认证从 ds-dash 拉取实时集群遥测数据；apiproxy 将状态桥接至会话 dock。 |
+| `ctx.deepseekBalance` | `core` | [`deepseek-balance`](../packages/remote/deepseek-balance) | - | `apiproxy` | - | Host 解析官方 DeepSeek API 密钥并查询 GET /user/balance；apiproxy 将快照桥接到输入栏胶囊。 |
+| `ctx.webServer` | `core` | `webserver` | - | `connection`、`modules`、`hmr` | - | 纯 node:http 载体：具名路由注册表、index 变换 tap，以及静态 dist 回退；web 传输插件自行注册路由。 |
 | `ctx.clientModules` | `core` | `modules` | - | `hmr` | - | 通过增量 `dsh.client` 扫描组合 __DSH_BOOT__ 入口图，提供插件组合包，并通知重建／图变更订阅方。 |
 | `ctx.workflowEngine` | `seam` | [`workflow`](../packages/workflow/workflow) | [`workflow-worker-thread`](../packages/workflow/workflow-worker-thread) | [`tool-workflow`](../packages/workflow/tool-workflow), [`tool-ralph`](../packages/workflow/tool-ralph) | - | 每个上下文使用一个引擎，与 bash 相同，且没有具名提供方注册表；通用工作流与固定 Ralph 消费方启动运行，其中的 agent() 调用通过 ctx.subagents 扇出。 |
 | `ctx.lsp` | `seam` | [`lsp`](../packages/lsp/lsp) | `lsp-local` | [`tool-lsp`](../packages/lsp/tool-lsp) | - | 提供方注册与选择，加上恰好四种操作的标准化查询执行；该 seam 不提供协议逃生口，后端必须转换为标准化请求和结果。 |
