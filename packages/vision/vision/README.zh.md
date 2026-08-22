@@ -4,7 +4,7 @@
 
 视觉能力接缝(`ctx.vision`)的 Service Definition:一个 Provider 注册表和唯一的 `describe` 操作,通过可替换的视觉模型后端把一张编码图片加可选的聚焦提问转换为面向模型的文本。它存在的意义是让纯文本主路由(例如 `deepseek-v4-flash`)也能推理图片文件:侧车视觉模型生成描述,主模型把它当作普通工具结果文本来消费。
 
-本包拥有 `ctx.vision` 键。它不带任何 Provider(请挂载一个,例如 [`dsh-vision-qwen`](../vision-qwen/README.md)),也不注册面向模型的工具(那是 [`dsh-tool-vision`](../tool-vision/README.md) 的职责)。
+本包拥有 `ctx.vision` 键。它不带任何 Provider(请挂载一个,例如 [`dsh-vision-qwen`](../vision-qwen/README.zh.md)),也不注册面向模型的工具(那是 [`dsh-tool-vision`](../tool-vision/README.zh.md) 的职责)。
 
 ## Service API
 
@@ -15,7 +15,7 @@
 
 `VisionProvider` 即 `{ id, available(): boolean, describe(request, signal?) }`。Provider 不校验图片本身:媒体类型与字节上限校验属于调用方 —— `view_image` 在描述之前先走附件服务的图片策略。
 
-选择语义(与注册顺序无关):配置了 `provider` id 时,它必须已注册且可用(否则 `VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(没有则 `VISION_PROVIDER_UNAVAILABLE`,多个则 `VISION_PROVIDER_AMBIGUOUS`)。除选择之外,Provider 也可能在任何请求发出之前拒绝调用——链 Provider 的输入估算守卫抛出 `VISION_INPUT_TOO_LARGE`(估算公式见[其 README](../vision-qwen/README.md#input-guard))。
+选择语义(与注册顺序无关):配置了 `provider` id 时,它必须已注册且可用(否则 `VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(没有则 `VISION_PROVIDER_UNAVAILABLE`,多个则 `VISION_PROVIDER_AMBIGUOUS`)。除选择之外,Provider 也可能在任何请求发出之前拒绝调用——链 Provider 的输入估算守卫抛出 `VISION_INPUT_TOO_LARGE`(估算公式见[其 README](../vision-qwen/README.zh.md#input-guard))。
 
 ## Config
 
@@ -33,7 +33,7 @@
 
 ## Model Experience
 
-间接地,通过 [`dsh-tool-vision`](../tool-vision/README.md) —— 该 Consumer 把本接缝返回的 `VisionDescription` 文本与 `model` 归属渲染进模型可见的 `view_image` 工具结果。
+间接地,通过 [`dsh-tool-vision`](../tool-vision/README.zh.md) —— 该 Consumer 把本接缝返回的 `VisionDescription` 文本与 `model` 归属渲染进模型可见的 `view_image` 工具结果。
 
 #### KV Cache effect
 

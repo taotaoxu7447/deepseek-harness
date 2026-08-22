@@ -2,11 +2,11 @@
 
 [English](README.md) | 中文
 
-面向模型的 `view_image` 工具,构建于 Harness [视觉能力接缝](../vision/README.md)(`ctx.vision`)之上:通过 `ctx.fs` 读取 PNG/JPEG/WebP/GIF 文件,经附件服务按部署的图片策略校验(不落盘),请挂载的视觉模型描述它,并以文本返回描述。
+面向模型的 `view_image` 工具,构建于 Harness [视觉能力接缝](../vision/README.zh.md)(`ctx.vision`)之上:通过 `ctx.fs` 读取 PNG/JPEG/WebP/GIF 文件,经附件服务按部署的图片策略校验(不落盘),请挂载的视觉模型描述它,并以文本返回描述。
 
 结果只有文本,因此 `view_image` 在任何模型路由上都可用 —— 包括纯文本路由(例如 `deepseek-official` 上的 `deepseek-v4-flash`),而在这些路由上 `read_image` 会因其图片块无法传输而拒绝。在支持图片输入的路由上,`read_image` 仍是更好的工具:模型看到的是图片本身。
 
-本包拥有 schema、校验、提示引导与呈现,从不包含具体的视觉后端(请挂载诸如 [`dsh-vision-qwen`](../vision-qwen/README.md) 的 Provider)。
+本包拥有 schema、校验、提示引导与呈现,从不包含具体的视觉后端(请挂载诸如 [`dsh-vision-qwen`](../vision-qwen/README.zh.md) 的 Provider)。
 
 ## Config
 
@@ -54,7 +54,7 @@ Use the view_image tool to understand what a PNG/JPEG/WebP/GIF image file looks 
 
 #### 模型看到什么
 
-模型看到生成的 [`view_image` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-vision)。输出上限是部署设置,不是模型参数。
+模型看到生成的 [`view_image` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-vision)。输出上限是部署设置,不是模型参数。
 
 #### Token effect
 

@@ -240,16 +240,14 @@ describe('RemoteTunnels', () => {
     const ctx = new Context()
     await ctx.plugin(FakeSubprocess).await()
     ;(ctx.subprocess as unknown as FakeSubprocess).sshAvailable = false
-    const fiber = ctx.plugin(RemoteTunnels, {})
-    await expect(fiber.await()).rejects.toThrow(/no "ssh" client on PATH/)
+    await expect(ctx.plugin(RemoteTunnels, {})).rejects.toThrow(/no "ssh" client on PATH/)
     await ctx.fiber.dispose()
   })
 
   it('fails loud at load on an invalid entry roster', async () => {
     const ctx = new Context()
     await ctx.plugin(FakeSubprocess).await()
-    const fiber = ctx.plugin(RemoteTunnels, { devices: [{ id: 'a', sshTarget: 'x' }, { id: 'a', sshTarget: 'y' }] })
-    await expect(fiber.await()).rejects.toThrow(/duplicate id/)
+    await expect(ctx.plugin(RemoteTunnels, { devices: [{ id: 'a', sshTarget: 'x' }, { id: 'a', sshTarget: 'y' }] })).rejects.toThrow(/duplicate id/)
     await ctx.fiber.dispose()
   })
 

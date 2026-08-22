@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-面向 harness [视觉能力接缝](../vision/README.md)（`ctx.vision`）的多协议 `VisionProvider` 链：一个 provider，其 `backends` 列表即优先级顺序——第一个可用条目先服务；耗尽重试预算的后端降级到下一优先级。每个后端说三种线路协议之一——OpenAI chat completions（本地 vLLM/SGLang 的 Qwen 部署，或任何兼容服务器）、OpenAI Responses，或 Anthropic Messages。图片以 base64 载荷随请求发送；回复文本即描述结果。
+面向 harness [视觉能力接缝](../vision/README.zh.md)（`ctx.vision`）的多协议 `VisionProvider` 链：一个 provider，其 `backends` 列表即优先级顺序——第一个可用条目先服务；耗尽重试预算的后端降级到下一优先级。每个后端说三种线路协议之一——OpenAI chat completions（本地 vLLM/SGLang 的 Qwen 部署，或任何兼容服务器）、OpenAI Responses，或 Anthropic Messages。图片以 base64 载荷随请求发送；回复文本即描述结果。
 
-这是一个**实现**包：它把 provider 注册进 `ctx.vision`，不拥有 `ctx.vision` 键，也不注册面向模型的工具（那是 [`dsh-tool-vision`](../tool-vision/README.md)）。它是函数/命名空间插件（`inject: ['vision']`），不是默认导出服务。
+这是一个**实现**包：它把 provider 注册进 `ctx.vision`，不拥有 `ctx.vision` 键，也不注册面向模型的工具（那是 [`dsh-tool-vision`](../tool-vision/README.zh.md)）。它是函数/命名空间插件（`inject: ['vision']`），不是默认导出服务。
 
 连接事实按次调用解析、分层：`cordis.yml` 条目配置在下，可选的 `vision` 用户设置段落（`ctx.settings`）在上——网页端 **设置 → 插件 → 视觉** 卡片编辑它——每个后端的 API key 经凭据接缝解析。链路、优先级、模型、协议、effort 选择或 key 的变更在下一次 describe 即生效，无需重启。没有任何可用后端（缺 `model` 或 `baseURL` 不可解析）的段落会停放 provider——已注册但拒绝被选——而不是让加载失败：设置卡片就是补完配置的预期位置。
 
@@ -81,6 +81,8 @@ schema 无法表达的跨字段规则在段落写入时校验（卡片保留被�
 - `qwen-local` → `chat_template_kwargs: { enable_thinking, thinking_budget? }`，仅限 chat completions。
 - `anthropic` → 开时发送 `thinking: { type: 'enabled', budget_tokens }`；此时按 Messages API 的要求省略 temperature。
 
+<a id="input-guard"></a>
+
 ## 输入守卫
 
 `maxInputTokens` 比较的是估算值而非计费数字：文本（指令加提示词）按 4 字符 1 token，图片按 750 像素 1 token，尺寸从 PNG/JPEG/GIF/WebP 头部解析；头部不可读时回退为按文本速率估算编码字节数。拒绝发生在任何请求发出之前，并跳过该后端的剩余重试；只有携带自己上限的下一优先级仍可能服务该输入。
@@ -97,7 +99,7 @@ Anthropic Messages：`model`；`max_tokens`；`system`；一条 user 消息，�
 
 ## 模型体验
 
-间接地经由 [`dsh-tool-vision`](../tool-vision/README.md)：它把本 provider 的描述文本与实际服务模型署名渲染进 `view_image` 工具结果。每次 describe 调用都是发往 sidecar 端点的独立请求，从不直接进入主模型的请求。
+间接地经由 [`dsh-tool-vision`](../tool-vision/README.zh.md)：它把本 provider 的描述文本与实际服务模型署名渲染进 `view_image` 工具结果。每次 describe 调用都是发往 sidecar 端点的独立请求，从不直接进入主模型的请求。
 
 #### KV 缓存影响
 

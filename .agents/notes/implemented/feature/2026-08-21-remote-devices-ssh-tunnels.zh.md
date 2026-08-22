@@ -12,7 +12,7 @@ Status: implemented
 
 远端 Host 本身就服务自己的 UI，所以这个功能转发端口而不是重写界面：`ssh -L <localPort>:127.0.0.1:<remotePort>` 把远端的 loopback UI 映射到本机，保真度逐像素一致、事件流完整、在窗口里发出的指令在远端机器上执行。认证完全落在用户既有的 ssh config 与密钥里；功能本身不接触任何凭据材料，spawn ssh 时带 `BatchMode=yes`，永远不会出现密码交互；目标、密钥或端口出错时 fail loud，给出可读原因。
 
-[`packages/remote/remote-tunnels`](../../../../packages/remote/remote-tunnels/README.md) 拥有整个生命周期。`remoteTunnels` cordis 服务安装 `remote` 设置小节，其 `devices` 清单为每台设备记录 id、ssh 目标、端口与 `autoConnect`；编辑即时生效——改了 ssh 目标会重启对应隧道，移除设备会终止对应隧道。每台设备的隧道由单一生命周期控制器驱动，状态机为 `disconnected → connecting → ready → failed(detail)`：spawn、探测转发的 loopback 端口直到应答 2xx、随后监护。命中致命 stderr 模式（认证失败、主机密钥、无法解析的主机名、转发被拒）直接进入 `failed` 且不重试；期望保持连接时的瞬时退出按指数退避重连（初始 1s、封顶 30s，均可配置）。`disconnect` 终止整个进程树，并且只在端口释放后才 resolve。显式本地端口必须唯一；缺省端口从 13389 起按清单顺序分配。
+[`packages/remote/remote-tunnels`](../../../../packages/remote/remote-tunnels/README.zh.md) 拥有整个生命周期。`remoteTunnels` cordis 服务安装 `remote` 设置小节，其 `devices` 清单为每台设备记录 id、ssh 目标、端口与 `autoConnect`；编辑即时生效——改了 ssh 目标会重启对应隧道，移除设备会终止对应隧道。每台设备的隧道由单一生命周期控制器驱动，状态机为 `disconnected → connecting → ready → failed(detail)`：spawn、探测转发的 loopback 端口直到应答 2xx、随后监护。命中致命 stderr 模式（认证失败、主机密钥、无法解析的主机名、转发被拒）直接进入 `failed` 且不重试；期望保持连接时的瞬时退出按指数退避重连（初始 1s、封顶 30s，均可配置）。`disconnect` 终止整个进程树，并且只在端口释放后才 resolve。显式本地端口必须唯一；缺省端口从 13389 起按清单顺序分配。
 
 apiproxy 的 `remote` 域暴露 `remote.list` / `remote.connect` / `remote.disconnect`，携带浏览器可安全引入的 `RemoteDeviceView`；`url` 仅在设备 `ready` 时出现。未组合隧道服务的部署会收到一份空清单和一个具名 `remote-tunnel-failed` 错误，与 vision 域在 provider 缺席时的先例一致。base bundle 以休眠方式组合该服务：没有 `remote` 小节时它空转。
 

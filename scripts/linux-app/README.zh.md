@@ -47,4 +47,4 @@ python3 scripts/linux-app/main.py
 - `DSH_SERVE_CMD` 可覆盖健康检查失败时 `dsh-serve` 启动的命令。
 - 壳层会设置 `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS`，因为 webview 只加载环回 UI，且在无法使用非特权 user namespace 时 WebKitGTK 的 bubblewrap 沙箱会失败。
 
-决策记录见 [Linux 桌面壳层 Agent Note](../../.agents/notes/implemented/feature/2026-08-19-linux-desktop-shell.md)。
+决策记录见 [Linux 桌面壳层 Agent Note](../../.agents/notes/implemented/feature/2026-08-19-linux-desktop-shell.zh.md)。

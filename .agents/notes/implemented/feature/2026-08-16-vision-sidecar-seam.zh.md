@@ -16,7 +16,7 @@ Harness 需要在纯文本路由上获得图像理解能力,同时不扩大主�
 
 ## Decision
 
-一个一等能力接缝,镜像 web 接缝([web capability seam](../architecture/2026-06-24-web-capability-seam.md)):
+一个一等能力接缝,镜像 web 接缝([web capability seam](../architecture/2026-06-24-web-capability-seam.zh.md)):
 
 1. `@deepseek-ai/dsh-vision`(`packages/vision/vision`)拥有 `ctx.vision`:Provider 注册、执行时选择(配置 id,或恰好一个可用 Provider —— `VISION_PROVIDER_CONFIGURED_MISSING` / `_UNAVAILABLE` / `_AMBIGUOUS` / `VISION_PROVIDER_UNAVAILABLE`)、唯一的 `describe({ image: { bytes, mediaType }, prompt? })` 操作,以及 `VisionError` 分类。
 2. `@deepseek-ai/dsh-vision-qwen`(`packages/vision/vision-qwen`)基于 OpenAI 兼容 `/chat/completions` 端点(本地 vLLM/SGLang Qwen VL 或等价物)实现 Provider:base64 data URL 图片部分、系统指令加聚焦提问、非流式补全、字符串或数组的 content 映射、deadline 兜底、中止/HTTP 错误分类。`model` 与 `baseURL` 无默认值 —— 它们命名一个具体部署,缺失时加载即失败;API key 为空时不发送 `Authorization` 头,因为无密钥本地端点是受支持的部署形态。

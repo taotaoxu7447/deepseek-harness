@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/vision/tool-vision/README.md
 README.md: b5b15f953c97bfa72d838bf54835b28e688f0d09
-README.zh.md: 45d9c1206d927c6f4e174c0386f0c6757f53f33d
+README.zh.md: 3cb3577a510ef19f0aa1f5ab4cd9c149ba780ce4

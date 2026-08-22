@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-remote-devices-ssh-tunnels.md
 2026-08-21-remote-devices-ssh-tunnels.md: 91034669a5fb9ba31f13fb15211c54ca0be03c88
-2026-08-21-remote-devices-ssh-tunnels.zh.md: 2c5f055605fc7e410bf1e88ab48b91787cd6c16f
+2026-08-21-remote-devices-ssh-tunnels.zh.md: d68b170d302b48bdca1fbcb0e20f8b5860b521f7
