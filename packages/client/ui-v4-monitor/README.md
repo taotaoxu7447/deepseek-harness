@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 DeepSeek V4 Flash live cluster monitoring dock above the composer, plus a sidebar footer toggle beside Remote. The strip is not bound to any session model: the sidebar button shows or hides it at any time.
 
+The collapsed dock follows the [Composer status strip reference](../../../docs/composer-status-strips.md): its visible card is 38px high, stack spacing belongs to the conversation owner, and lower-priority telemetry disappears before the row can wrap. Expanding the same card reveals the bounded per-slot details.
+
 ## Slot Occupancy
 
 - `conversation.input.dock` at `order: 5`

@@ -4,6 +4,8 @@
 
 DeepSeek V4 Flash 集群监控状态条挂在输入框上方；侧栏底部（远程连接旁边）有开关。不绑定任何会话模型，随时可开可关。
 
+收起状态遵循 [Composer 状态条参考](../../../docs/composer-status-strips.zh.md)：可见卡片高 38px，条目间距由 conversation 所有方提供，低优先级遥测会在该行可能换行之前先隐藏。展开同一张卡片后显示有高度上限的逐 Slot 详情。
+
 ## 插槽占用
 
 - `conversation.input.dock`，`order: 5`

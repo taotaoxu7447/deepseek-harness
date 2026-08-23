@@ -126,7 +126,7 @@ describe('V4MonitorDock component', () => {
         useSession={(() => ({})) as never}
         useInput={(() => ({})) as never}
         inputActions={{} as never}
-        useProjection={(() => null) as never}
+        useProjection={() => null}
         useSessions={(() => ({})) as never}
         useWorkspaces={(() => ({})) as never}
       />,
@@ -136,10 +136,12 @@ describe('V4MonitorDock component', () => {
     expect(screen.getByText('Slot 0')).toBeTruthy()
     expect(screen.getByText('Slot 1')).toBeTruthy()
     expect(screen.getByText(/Decoding 142.5 tok\/s/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Collapse' }).getAttribute('aria-expanded')).toBe('true')
 
     act(() => {
       store.set({ ...store.getSnapshot(), collapsed: true })
     })
+    expect(screen.getByRole('button', { name: 'Expand details' }).getAttribute('aria-expanded')).toBe('false')
     expect(screen.getByText('S0')).toBeTruthy()
     expect(screen.getByText('143 tok/s')).toBeTruthy()
     expect(screen.getByText('S1')).toBeTruthy()
