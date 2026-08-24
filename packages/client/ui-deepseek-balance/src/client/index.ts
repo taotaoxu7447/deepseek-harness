@@ -17,6 +17,8 @@ export { BalanceCapsule } from './BalanceCapsule.tsx'
 export type { BalanceCapsuleProps } from './BalanceCapsule.tsx'
 export { BalanceToggle } from './BalanceToggle.tsx'
 export type { BalanceToggleProps } from './BalanceToggle.tsx'
+export { ConsumptionPopover, formatCurrency } from './ConsumptionPopover.tsx'
+export type { ConsumptionPopoverProps } from './ConsumptionPopover.tsx'
 export {
   BALANCE_NS, BalanceController, DEFAULT_POLL_INTERVAL_MS, formatBalance,
 } from './balance-controller.ts'
