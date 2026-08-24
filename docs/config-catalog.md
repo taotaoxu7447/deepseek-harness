@@ -3121,7 +3121,7 @@ Source: [`packages/interaction/user-approval/src/index.ts:177`](../packages/inte
 export interface Config {
   /** Whether the composer dock is shown. Defaults to false; the sidebar toggle writes this. */
   enabled?: boolean
-  /** The ds-dash monitor endpoint URL. */
+  /** The ds-dash monitor endpoint URL. Empty until the user supplies one. */
   monitorUrl?: string
   /** Invite passcode sent in the `X-Dash-Pass` header. Empty until the user supplies one. */
   passcode?: string

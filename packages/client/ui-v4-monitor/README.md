@@ -21,5 +21,5 @@ None; the package never assembles or sends provider requests.
 
 ## Known Limitations and Deferred Work
 
-- **Invite code** — The Host does not fetch until an invite code is stored in the `local-v4` settings section.
+- **Connection settings** — The Host does not fetch until both a monitor address and an invite code are stored in the `local-v4` settings section.
 - **Client polling** — While shown, state updates via the Host RPC bridge at the configured polling interval (default 2s).

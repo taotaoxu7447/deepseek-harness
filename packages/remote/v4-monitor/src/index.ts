@@ -19,8 +19,8 @@ declare module '@deepseek-ai/cordis' {
 /** Settings namespace carrying the Local V4 monitor settings. */
 export const LOCAL_V4_SETTINGS_NAMESPACE = settingsNamespace('local-v4')
 
-/** Default monitor endpoint address. */
-export const DEFAULT_MONITOR_URL = 'https://64.90.8.184:9445'
+/** Empty endpoint default: each installation must select its own monitor. */
+export const DEFAULT_MONITOR_URL = ''
 
 /** Default polling interval in ms. */
 export const DEFAULT_POLL_INTERVAL_MS = 2000
@@ -29,7 +29,7 @@ export const DEFAULT_POLL_INTERVAL_MS = 2000
 export interface Config {
   /** Whether the composer dock is shown. Defaults to false; the sidebar toggle writes this. */
   enabled?: boolean
-  /** The ds-dash monitor endpoint URL. */
+  /** The ds-dash monitor endpoint URL. Empty until the user supplies one. */
   monitorUrl?: string
   /** Invite passcode sent in the `X-Dash-Pass` header. Empty until the user supplies one. */
   passcode?: string
@@ -62,13 +62,14 @@ export class V4MonitorService extends Service {
     this.current = () => entry
   }
 
-  protected async [Service.init](): Promise<void> {
+  protected [Service.init](): Promise<void> {
     installSettingsSection(this.ctx, LOCAL_V4_SETTINGS_NAMESPACE, Config, this.entry, {
       setSource: (source) => {
         this.current = source
       },
       onChange: () => {},
     })
+    return Promise.resolve()
   }
 
   /** Current active configuration. */
@@ -85,14 +86,15 @@ export class V4MonitorService extends Service {
   async fetchState(force: boolean = false, signal?: AbortSignal): Promise<V4MonitorState | null> {
     const config = this.config
     const passcode = (config.passcode ?? '').trim()
-    if (passcode === '') return null
+    const monitorUrl = (config.monitorUrl ?? DEFAULT_MONITOR_URL).trim()
+    if (monitorUrl === '' || passcode === '') return null
 
     const now = Date.now()
     if (!force && this.lastState !== null && now - this.lastFetchedAt < 1000) {
       return this.lastState
     }
 
-    const baseUrl = (config.monitorUrl ?? DEFAULT_MONITOR_URL).replace(/\/+$/, '')
+    const baseUrl = monitorUrl.replace(/\/+$/, '')
     const url = `${baseUrl}/ds-dash/api/state`
 
     try {

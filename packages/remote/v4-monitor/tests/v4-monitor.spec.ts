@@ -34,7 +34,7 @@ describe('V4MonitorService', () => {
     vi.restoreAllMocks()
   })
 
-  it('initializes with the dock off and no invite code', async () => {
+  it('initializes with the dock off and no connection settings', async () => {
     const ctx = new Context()
     await ctx.plugin(V4MonitorService, {}).await()
 
@@ -44,11 +44,14 @@ describe('V4MonitorService', () => {
     expect(ctx.v4Monitor.config.passcode ?? '').toBe('')
   })
 
-  it('does not fetch without an invite code', async () => {
-    const ctx = new Context()
-    await ctx.plugin(V4MonitorService, {}).await()
+  it('does not fetch until both monitor address and invite code are configured', async () => {
+    const noPasscode = new Context()
+    await noPasscode.plugin(V4MonitorService, { monitorUrl: 'https://monitor.example' }).await()
+    const noMonitor = new Context()
+    await noMonitor.plugin(V4MonitorService, { passcode: 'test-pass' }).await()
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    expect(await ctx.v4Monitor.fetchState(true)).toBeNull()
+    expect(await noPasscode.v4Monitor.fetchState(true)).toBeNull()
+    expect(await noMonitor.v4Monitor.fetchState(true)).toBeNull()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
@@ -66,19 +69,21 @@ describe('V4MonitorService', () => {
 
     const state = await ctx.v4Monitor.fetchState(true)
     expect(state).toEqual(MOCK_STATE)
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://64.90.8.184:9445/ds-dash/api/state',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'X-Dash-Pass': 'test-pass',
-        }),
-      }),
-    )
+    expect(fetchSpy).toHaveBeenCalledOnce()
+    const request = fetchSpy.mock.calls[0]
+    expect(request?.[0]).toBe('https://64.90.8.184:9445/ds-dash/api/state')
+    expect(request?.[1]?.headers).toEqual({
+      'X-Dash-Pass': 'test-pass',
+      'Accept': 'application/json',
+    })
   })
 
   it('returns cached state when fetch fails', async () => {
     const ctx = new Context()
-    await ctx.plugin(V4MonitorService, { passcode: 'test-pass' }).await()
+    await ctx.plugin(V4MonitorService, {
+      monitorUrl: 'https://monitor.example',
+      passcode: 'test-pass',
+    }).await()
 
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
