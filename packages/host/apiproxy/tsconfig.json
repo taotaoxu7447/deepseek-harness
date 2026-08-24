@@ -90,6 +90,9 @@
       "path": "../../vision/vision"
     },
     {
+      "path": "../../remote/remote-tunnels"
+    },
+    {
       "path": "../../workspace/workspace"
     },
     {

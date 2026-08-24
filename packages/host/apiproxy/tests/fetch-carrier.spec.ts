@@ -143,7 +143,7 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
           rpcId: request.rpcId,
           result: {
             ok: true,
-            value: { version: 'v', cwd: '/w', attachedSessions: 0, canOpenPath: true },
+            value: { version: 'v', cwd: '/w', attachedSessions: 0, home: '/h', canOpenPath: true },
           },
         }
       },
@@ -287,6 +287,27 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { models: [] } } }
       },
     },
+    remote: {
+      async list(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { devices: [] } } }
+      },
+      async connect(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'remote-tunnel-failed' as const, message: 'nope', details: { id: request.payload.id } } } }
+      },
+      async disconnect(request) {
+        return { rpcId: request.rpcId, result: { ok: false, error: { code: 'remote-tunnel-failed' as const, message: 'nope', details: { id: request.payload.id } } } }
+      },
+    },
+    v4Monitor: {
+      async state(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { state: null } } }
+      },
+    },
+    balance: {
+      async get(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { balance: null } } }
+      },
+    },
     events: {
       mux: (_request, signal) => stream(muxFrames, signal),
       host: (_request, signal) => stream(hostFrames, signal),
@@ -370,6 +391,7 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     })).result.ok).toBe(true)
     expect((await c.sessions.cancel({ sessionId: 's' as never })).result.ok).toBe(true)
     expect((await c.host.describe({})).result.ok).toBe(true)
+    expect((await c.vision.discoverModels({ baseURL: 'https://vision.test/v1' })).result).toEqual({ ok: true, value: { models: [] } })
   })
 
   it('round-trips every agent-preset method, authoring included', async () => {

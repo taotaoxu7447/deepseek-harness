@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-17-vision-chain-protocols-effort-presets.md
 2026-08-17-vision-chain-protocols-effort-presets.md: 89adf06df03c9c6ae77d346eefde991790585749
-2026-08-17-vision-chain-protocols-effort-presets.zh.md: 94dd778ff9eff4e18330b79bd81a68ee1bb29dfb
+2026-08-17-vision-chain-protocols-effort-presets.zh.md: 2fb1df95deda36ae69ef25d977f157c81f624798

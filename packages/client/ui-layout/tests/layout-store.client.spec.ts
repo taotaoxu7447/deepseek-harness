@@ -19,7 +19,14 @@ beforeEach(() => { localStorage.clear() })
 describe('createLayoutStore', () => {
   it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: SIDEBAR_DEFAULT,
+      details: 0,
+      narrow: false,
+      narrowExpanded: false,
+      remoteTabs: [],
+      activeRemote: undefined,
+    })
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -55,7 +62,14 @@ describe('createLayoutStore', () => {
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: 400,
+      details: 0,
+      narrow: true,
+      narrowExpanded: true,
+      remoteTabs: [],
+      activeRemote: undefined,
+    })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -98,6 +112,46 @@ describe('createLayoutStore', () => {
       details: 0,
       narrow: false,
       narrowExpanded: false,
+      remoteTabs: [],
+      activeRemote: undefined,
     })
+  })
+
+  it('opens, stages, and closes remote tabs', () => {
+    const { store, actions } = createLayoutStore().create()
+    const macMini = { id: 'mac-mini', label: 'Mac Mini', url: 'http://127.0.0.1:3081/' }
+    const nas = { id: 'nas', label: 'NAS', url: 'http://127.0.0.1:3082/' }
+
+    actions.openRemoteTab(macMini)
+    expect(store.getSnapshot().remoteTabs).toEqual([macMini])
+    expect(store.getSnapshot().activeRemote).toBe('mac-mini')
+
+    // Re-opening the same device refreshes its address and keeps one tab.
+    actions.openRemoteTab({ ...macMini, url: 'http://127.0.0.1:3099/' })
+    expect(store.getSnapshot().remoteTabs).toEqual([{ ...macMini, url: 'http://127.0.0.1:3099/' }])
+
+    actions.openRemoteTab(nas)
+    actions.showLocalTab()
+    expect(store.getSnapshot().activeRemote).toBeUndefined()
+    expect(store.getSnapshot().remoteTabs).toHaveLength(2)
+
+    // Staging an unknown id is a no-op.
+    actions.activateRemoteTab('ghost')
+    expect(store.getSnapshot().activeRemote).toBeUndefined()
+    actions.activateRemoteTab('mac-mini')
+    expect(store.getSnapshot().activeRemote).toBe('mac-mini')
+
+    // Closing an inactive tab leaves the stage alone.
+    actions.closeRemoteTab('nas')
+    expect(store.getSnapshot().activeRemote).toBe('mac-mini')
+
+    // Closing the staged tab hands the stage to the newest survivor, else local.
+    actions.openRemoteTab(nas)
+    actions.activateRemoteTab('mac-mini')
+    actions.closeRemoteTab('mac-mini')
+    expect(store.getSnapshot().activeRemote).toBe('nas')
+    actions.closeRemoteTab('nas')
+    expect(store.getSnapshot().activeRemote).toBeUndefined()
+    expect(store.getSnapshot().remoteTabs).toEqual([])
   })
 })

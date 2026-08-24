@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-linux-desktop-shell.md
 2026-08-19-linux-desktop-shell.md: f23dbe1ad4bd555d408b7179c44b34a4d39fdf46
-2026-08-19-linux-desktop-shell.zh.md: 8e9e8e6cdef294e7ed5c5856dc8d472ae1efc61d
+2026-08-19-linux-desktop-shell.zh.md: 8c638967b5f8a9715fe0dde32e705489e0ab8492

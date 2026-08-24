@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Pure React attachment atoms (zero cordis): the composer draft-image rail (`AttachmentRail`), the chat-history image gallery (`MessageImage`/`ImageGallery`), the original-image lightbox (`ImageLightbox`), and the full-page drop overlay (`DropOverlay`). Every string arrives through label props resolved by the owning plugin's own locale namespace, and nothing here reads application state; `@deepseek-ai/dsh-client-ui-conversation` is the current consumer, bridging its `conversation` dictionary through its `image-labels` module.
+Dynamic attachment presentation plugin for the conversation UI. It waits for the conversation package's `conversation.input.attachments` and `conversation.message.images` declarations through `ctx.slots.inject`, then registers the composer draft-image rail, document drop target, chat-history image gallery, and original-image lightbox. The conversation slot owner supplies attachment data, image loading, callbacks, and its namespace translator; presentation components remain pure props and are not exported from the package entry.
 
 ## Attachment rail
 
@@ -16,9 +16,13 @@ Pure React attachment atoms (zero cordis): the composer draft-image rail (`Attac
 
 `DropOverlay` is the full-viewport invitation shown while a file drag is over the page: illustration, title, and a limits line while drops are accepted (`disabled` swaps the blocked illustration and hides the limits line). The layer is pointer-inert — the owner's document-level drag listeners keep the enter/leave count and decide accept/reject; the overlay only shows state. It portals to the body like the lightbox.
 
+## Folder drops and the native shell bridge
+
+A page-level drop never sees absolute paths — `dataTransfer.files` flattens to File objects, and a dropped folder arrives as an empty husk. Two intakes cover the gap. In a browser, a drop containing a folder is walked through the `webkitGetAsEntry` tree (paged directory reads, a 512-entry budget against node_modules-shaped trees) and the images found inside attach through the normal validation path; a folder without attachable images adds nothing, and paths stay out of reach. Under the macOS shell a transparent overlay owns Finder drags before the page sees them: folders and non-image files arrive as absolute-path entries over `window.__dshNativeDrop` and forward to the owner's `onAddPaths`, while image files ride the same payload as base64 bytes, are rebuilt into Files, and attach exactly as a page-level drop did (still gated by `canAcceptDrop`). The mounted composer registers the receiver and withdraws it on unmount, identity-guarded, so a drop always lands on the visible session.
+
 ## Model Experience
 
-None, as the package renders pure React atoms in the browser; nothing here reaches a model request.
+None, as the plugin only renders attachment state supplied by the conversation UI and contributes no model-visible input.
 
 #### KV Cache effect
 
@@ -28,4 +32,4 @@ None; this package neither assembles nor sends a provider request.
 
 - **Images only** — non-image files have no rail card or history renderer yet; DeepSeek Chat-style file cards and upload-progress states wait until the composer accepts non-image attachments.
 - **No zoom or download in the lightbox** — the preview renders the original at fit-to-viewport size only.
-- **The lightbox does not trap focus** — it sets `aria-modal` and restores focus on close, but Tab can reach the page behind it (behavior carried over from the pre-package component).
+- **The lightbox does not trap focus** — it sets `aria-modal` and restores focus on close, but Tab can reach the page behind it.

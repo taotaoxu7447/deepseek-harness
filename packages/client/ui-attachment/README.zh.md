@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-纯 React 附件原子组件（零 cordis）：输入框草稿图片栏（`AttachmentRail`）、聊天历史图片画廊（`MessageImage`/`ImageGallery`）、原图灯箱（`ImageLightbox`）与整页拖放遮罩（`DropOverlay`）。所有文案都由持有方插件在自己的语言命名空间中解析后经 label props 传入，此包不读取任何应用状态；当前消费者是 `@deepseek-ai/dsh-client-ui-conversation`，经其 `image-labels` 模块桥接 `conversation` 词典。
+对话 UI 的动态附件呈现插件。它通过 `ctx.slots.inject` 等待 conversation 包声明 `conversation.input.attachments` 与 `conversation.message.images`，随后注册输入框草稿图片栏、文档拖放目标、聊天历史图片画廊和原图灯箱。conversation slot 持有方提供附件数据、图片加载、回调及其命名空间翻译器；呈现组件保持纯 props，且不从包入口导出。
 
 ## 附件栏
 
@@ -16,9 +16,13 @@
 
 `DropOverlay` 是文件拖拽悬停页面时的全视口邀请层：插画、标题，接受拖放时再加一行上限说明（`disabled` 换为禁用插画并隐藏上限行）。该层不接收指针事件——持有方的 document 级拖拽监听器负责 enter/leave 计数和接受与否的判定；遮罩只呈现状态。与灯箱一样经 body portal 渲染。
 
+## 文件夹拖放与原生壳桥接
+
+页面级拖放永远拿不到绝对路径——`dataTransfer.files` 只给出平铺的 File 对象，拖入的文件夹只落得一个空壳。两条 intake 路径补齐这个缺口。浏览器中，含文件夹的拖放会沿 `webkitGetAsEntry` 条目树递归遍历（目录分页读取，512 个条目的预算抵御 node_modules 形状的树），把其中找到的图片走正常校验附加；文件夹里没有可附加的图片则不产生任何动作，路径依然不可得。在 macOS 壳中，透明覆盖层在页面之前接管 Finder 拖放：文件夹与非图片文件以绝对路径条目经 `window.__dshNativeDrop` 送达并转发给持有方的 `onAddPaths`，图片文件则以 base64 字节随同一载荷抵达、重建为 File 后附加，行为与页面级拖放一致（仍受 `canAcceptDrop` 门控）。当前挂载的输入框注册该接收器并在卸载时按身份守卫注销，因此一次拖放总是落在当前可见的会话上。
+
 ## 模型体验
 
-无。该包（package）在浏览器中渲染纯 React 原子组件；这里没有任何内容进入模型请求。
+无，因为该插件只渲染由对话 UI 提供的附件状态，不贡献模型可见输入。
 
 #### KV Cache 影响
 
@@ -28,4 +32,4 @@
 
 - **仅支持图片** — 非图片文件尚无附件栏卡片与历史渲染；DeepSeek Chat 风格的文件卡片和上传进度状态等输入框接受非图片附件后再做。
 - **灯箱无缩放与下载** — 预览仅以适配视口的尺寸渲染原图。
-- **灯箱不锁定焦点** — 它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面（沿袭入包前组件的行为）。
+- **灯箱不锁定焦点** — 它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面。

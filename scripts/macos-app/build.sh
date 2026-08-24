@@ -1,11 +1,15 @@
 #!/bin/zsh
 # Build and install the DeepSeek Harness macOS app: compiles the WKWebView
-# shell, generates the icon, assembles the bundle, and copies it to
-# /Applications (falling back to ~/Applications without write access).
+# shell and its remote-window helper, generates the icon, assembles the
+# bundle, and copies it to /Applications (falling back to ~/Applications
+# without write access). The helper lives in Contents/Helpers as its own
+# .app (own bundle id, own Dock icon, "远程" name) and hosts the tunneled
+# remote UI that "open in new window" routes to it.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 NAME="DeepSeek Harness"
+HELPER_NAME="DeepSeek Harness Remote"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -15,7 +19,12 @@ MAC="$APP/Contents/MacOS"
 mkdir -p "$RES" "$MAC"
 
 echo "→ compiling shell"
-swiftc -O -o "$MAC/DeepSeekHarness" "$HERE/main.swift"
+swiftc -O -o "$MAC/DeepSeekHarness" "$HERE/main.swift" "$HERE/shared.swift"
+
+echo "→ compiling remote helper"
+HELPER="$APP/Contents/Helpers/$HELPER_NAME.app"
+mkdir -p "$HELPER/Contents/MacOS" "$HELPER/Contents/Resources"
+swiftc -O -o "$HELPER/Contents/MacOS/DeepSeekHarnessRemote" "$HERE/remote/main.swift" "$HERE/shared.swift"
 
 echo "→ generating icon"
 ICONSET="$STAGE/AppIcon.iconset"
@@ -30,6 +39,11 @@ cp "$STAGE/AppIconLight.png" "$ICONSET/icon_512x512@2x.png"
 iconutil -c icns -o "$RES/AppIcon.icns" "$ICONSET"
 cp "$STAGE/AppIconLight.png" "$RES/AppIconLight.png"
 cp "$STAGE/AppIconDark.png" "$RES/AppIconDark.png"
+# The helper wears the same whale; its Dock name ("…远程") carries the
+# distinction the user asked for.
+cp "$RES/AppIcon.icns" "$HELPER/Contents/Resources/AppIcon.icns"
+cp "$STAGE/AppIconLight.png" "$HELPER/Contents/Resources/AppIconLight.png"
+cp "$STAGE/AppIconDark.png" "$HELPER/Contents/Resources/AppIconDark.png"
 
 echo "→ assembling bundle"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -54,11 +68,38 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+cat > "$HELPER/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>DeepSeek Harness 远程</string>
+  <key>CFBundleDisplayName</key><string>DeepSeek Harness 远程</string>
+  <key>CFBundleExecutable</key><string>DeepSeekHarnessRemote</string>
+  <key>CFBundleIdentifier</key><string>com.deepseek.harness.desktop.remote</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsLocalNetworking</key><true/>
+  </dict>
+</dict>
+</plist>
+PLIST
+
 echo "→ installing"
 DEST="/Applications"
-if ! cp -R "$APP" "$DEST/" 2>/dev/null; then
+# Remove any previous copy first: a merge-copy over an existing bundle leaves
+# stale files behind and Gatekeeper then rejects the result as a damaged,
+# mis-signed app. A fresh tree also drops the quarantine/cache state of the
+# bundle it replaces.
+if ! rm -rf "$DEST/$NAME.app" 2>/dev/null || ! cp -R "$APP" "$DEST/" 2>/dev/null; then
   DEST="$HOME/Applications"
   mkdir -p "$DEST"
+  rm -rf "$DEST/$NAME.app"
   cp -R "$APP" "$DEST/"
 fi
 echo "installed: $DEST/$NAME.app"

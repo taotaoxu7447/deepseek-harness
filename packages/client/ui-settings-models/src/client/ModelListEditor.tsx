@@ -21,6 +21,7 @@ import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import { messageOf } from './store.ts'
+import { ModalityChips, modalitiesOf } from './ModalityChips.tsx'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 import {
@@ -261,7 +262,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, string | number | boolean | null | undefined | Record<string, unknown>>): void => {
+  const patch = (index: number, next: Record<string, unknown>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -338,6 +339,18 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       const next = new Set(current)
       if (!next.delete(id)) next.add(id)
       return next
+    })
+  }
+
+  const activeCandidates = candidates ?? []
+  const allCandidatesPicked = activeCandidates.length > 0
+    && activeCandidates.every(candidate => picked.has(candidate.id))
+
+  const toggleAllCandidates = (): void => {
+    setPicked((current) => {
+      return activeCandidates.every(candidate => current.has(candidate.id))
+        ? new Set()
+        : new Set(activeCandidates.map(candidate => candidate.id))
     })
   }
 
@@ -487,6 +500,16 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     />
                   </label>
                   <div className={`${styles['modelField']} ${styles['effortField']}`}>
+                    <span className={styles['modelFieldLabel']}>{t('modelInputModalities')}</span>
+                    <ModalityChips
+                      value={modalitiesOf(model, 'input')}
+                      ariaLabel={`${t('modelInputModalities')} ${index + 1}`}
+                      disabled={disabled}
+                      t={t}
+                      onChange={(next) => { patch(index, { input: next }) }}
+                    />
+                  </div>
+                  <div className={`${styles['modelField']} ${styles['effortField']}`}>
                     <span className={styles['modelFieldLabel']}>{t('modelReasoningEfforts')}</span>
                     <div className={styles['effortToolbar']}>
                       <div
@@ -569,6 +592,11 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           </>
         )}
       >
+        <div className={styles['candidateActions']}>
+          <Button variant="ghost" size="sm" onClick={toggleAllCandidates}>
+            {t(allCandidatesPicked ? 'fetchDeselectAll' : 'fetchSelectAll')}
+          </Button>
+        </div>
         <ul className={styles['candidateList']}>
           {(candidates ?? []).map(candidate => (
             <li key={candidate.id} className={styles['candidate']}>

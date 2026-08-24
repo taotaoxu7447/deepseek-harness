@@ -108,10 +108,11 @@ export class FakeApiClient implements IApiClient {
     version: string
     cwd: string
     attachedSessions: number
+    home: string
     canOpenPath: boolean
   }>> =
     () => Promise.resolve(ok({
-      version: '0-fake', cwd: '/f', attachedSessions: 0, canOpenPath: true,
+      version: '0-fake', cwd: '/f', attachedSessions: 0, home: '/h', canOpenPath: true,
     }))
   onPickDirectory: (payload: unknown) => Promise<RpcResponse<{ path: string | null }>> =
     () => Promise.resolve(ok({ path: null }))
@@ -279,6 +280,24 @@ export class FakeApiClient implements IApiClient {
 
   readonly vision: IApiClient['vision'] = {
     discoverModels: payload => this.record('vision.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
+  }
+
+  readonly remote: IApiClient['remote'] = {
+    list: payload => this.record('remote.list', payload, Promise.resolve(ok({ devices: [] }))),
+    connect: payload => this.record('remote.connect', payload, Promise.resolve(ok({
+      device: { id: payload.id, sshTarget: '', remotePort: 0, localPort: 0, autoConnect: false, tunnel: 'disconnected' as const },
+    }))),
+    disconnect: payload => this.record('remote.disconnect', payload, Promise.resolve(ok({
+      device: { id: payload.id, sshTarget: '', remotePort: 0, localPort: 0, autoConnect: false, tunnel: 'disconnected' as const },
+    }))),
+  }
+
+  readonly v4Monitor: IApiClient['v4Monitor'] = {
+    state: payload => this.record('v4Monitor.state', payload, Promise.resolve(ok({ state: null }))),
+  }
+
+  readonly balance: IApiClient['balance'] = {
+    get: payload => this.record('balance.get', payload, Promise.resolve(ok({ balance: null }))),
   }
 
   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */

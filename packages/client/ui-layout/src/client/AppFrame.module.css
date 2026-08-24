@@ -10,6 +10,120 @@
   transition: grid-template-columns var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
+/* The window chrome once remote tabs exist: strip on top, stage below. The
+   frame keeps height:100% inside it, so the strip borrows its height from the
+   stage rather than squeezing the columns' own geometry math. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shell .frame {
+  flex: 1;
+  min-height: 0;
+}
+
+/* The frame stays mounted while a remote tab is staged, so the local session
+   UI keeps its scroll, composer drafts, and store subscriptions. */
+.shell .frame[hidden] {
+  display: none;
+}
+
+.tabStrip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 0;
+  background: var(--dsw-specific-sidebar-fill);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  overflow-x: auto;
+  flex: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--dsw-alias-text-secondary, currentColor);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--dsw-alias-button-floating-fill);
+}
+
+.tab[data-active] {
+  background: var(--dsw-alias-bg-base);
+  border-color: var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-text-primary, currentColor);
+}
+
+.tabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabBadge {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--dsw-alias-button-floating-fill);
+  border: 1px solid var(--dsw-alias-border-l2);
+}
+
+.tabClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tabClose:hover {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+/* The staged remote surface: one iframe per open tab, only the staged one
+   visible so every remote session keeps running while hidden. */
+.remoteStage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+.remoteFrame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.remoteFrame[hidden] {
+  display: none;
+}
+
 /* Dragging writes widths at pointer cadence; easing them would detach the
    column from the handle. */
 .frame[data-dragging] {

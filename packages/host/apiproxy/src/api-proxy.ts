@@ -5,14 +5,16 @@
 
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { dirname } from 'node:path'
+import { z as zod } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
-import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError, AttachmentId, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
@@ -39,7 +41,7 @@ import type {
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
-  WorkspaceId, WorkspaceView,
+  V4MonitorStateView, BalanceView, WorkspaceId, WorkspaceView,
 } from './api/index.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -89,6 +91,7 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // presence decides whether pasted images may enter a text-only session as
 // view_image pointers (the admission bridge in `prompt`).
 import type {} from '@deepseek-ai/dsh-vision'
+import type {} from '@deepseek-ai/dsh-remote-tunnels'
 // Side-effect type import: resolves the `approval/request` waterfall and
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -173,15 +176,6 @@ function pointerReferencesImage(events: readonly SessionEvent[], attachmentId: s
   return false
 }
 
-/** Decode the browser payload while rejecting non-canonical base64 forms. */
-function decodeBase64(data: string): Uint8Array {
-  const decoded = Buffer.from(data, 'base64')
-  if (data.length === 0 || decoded.toString('base64') !== data) {
-    throw new AttachmentError('Image upload is not canonical base64.', 'INVALID_IMAGE_BASE64')
-  }
-  return new Uint8Array(decoded)
-}
-
 /** `anthropic-version` header value for the Messages listing probe; a protocol constant. */
 const ANTHROPIC_MESSAGES_VERSION = '2023-06-01'
 
@@ -258,28 +252,12 @@ async function durablePromptContent(ctx: Context, content: readonly PromptConten
   if (content.every(part => part.type === 'text')) {
     return content.map(part => ({ type: 'text', text: part.text }))
   }
-  const prepared = content.map(part => part.type === 'text'
-    ? part
-    : { part, data: decodeBase64(part.data) })
-  const images = prepared.filter((part): part is Extract<typeof part, { data: Uint8Array }> => 'data' in part)
-  const refs = await ctx.attachments.saveImages(images.map(image => ({
-    data: image.data,
-    mediaType: image.part.mediaType,
-    ...image.part.name === undefined ? {} : { name: image.part.name },
-  })))
-  const blocks: ContentBlock[] = []
-  let imageIndex = 0
-  for (const item of prepared) {
-    if (!('data' in item)) {
-      blocks.push({ type: 'text', text: item.text })
-      continue
-    }
-    const attachment = refs[imageIndex++]
-    /* v8 ignore next -- each prepared image supplied exactly one saveImages input and therefore one ordered ref. */
-    if (attachment === undefined) throw new Error('attachment batch result did not preserve input cardinality')
-    blocks.push({ type: 'image', attachment })
-  }
-  return blocks
+  const refs = await admitEncodedImages(ctx.attachments, content.filter(part => part.type === 'image'))
+  let next = 0
+  return content.map(part => part.type === 'text'
+    ? { type: 'text', text: part.text }
+    // admitEncodedImages returns one reference per image part in order.
+    : { type: 'image', attachment: refs[next++] as ImageAttachmentRef })
 }
 
 /** Search durable content for an image reference, including nested tool results. */
@@ -324,11 +302,6 @@ function imageInEvent(event: SessionEvent, match: (ref: ImageAttachmentRef) => b
     return imageBlockIn([data.chunk.block], match)
   }
   return undefined
-}
-
-/** True when the current model-visible surface contains an image. */
-function messagesHaveImage(messages: readonly { content: readonly ContentBlock[] }[]): boolean {
-  return messages.some(message => contentHasImage(message.content))
 }
 
 /** Resolve the first reference matching one opaque id. */
@@ -1381,10 +1354,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     projectionCtx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
       key: 'sessionListMetadata',
-      schema: sessionListMetadataProjectionSchema,
+      stateSchema: sessionListMetadataProjectionSchema,
       init: () => ({ blank: true, lastPromptAt: null }),
       apply: applySessionListMetadata,
-      view: state => state,
+      wire: { viewSchema: sessionListMetadataProjectionSchema, view: state => state },
       stateVersion: 1,
     })
   })
@@ -1405,10 +1378,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   ctx.inject(['sessionProjections', 'attachments'], (projectionCtx) => {
     projectionCtx.sessionProjections.register<'imageLimits', null>({
       key: 'imageLimits',
-      schema: imageLimitsProjectionSchema,
+      stateSchema: zod.null(),
       init: () => null,
       apply: state => state,
-      view: () => projectionCtx.attachments.imageLimits,
+      wire: { viewSchema: imageLimitsProjectionSchema, view: () => projectionCtx.attachments.imageLimits },
       stateVersion: 1,
     })
   })
@@ -2353,18 +2326,6 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
                 ? {}
                 : { reasoningEffort: ReasoningEffortId(reasoningEffort) },
             })
-            const pendingImage = [...found.agent.inbox.nextTurn, ...found.agent.inbox.nextStep]
-              .some(message => contentHasImage(message.content))
-            if (pendingImage || messagesHaveImage(found.agent.session.deriveMessages())) {
-              const info = await ctx.llm.resolveModelInfo(resolved.provider, resolved.model)
-              if (info.inputModalities !== undefined && !info.inputModalities.includes('image')) {
-                return err(request, {
-                  code: 'model-unavailable',
-                  message: `Model "${resolved.model}" does not accept image input, but this session already contains images; select an image-capable model.`,
-                  details: { provider, model },
-                })
-              }
-            }
             const selected: ModelSelection = {
               provider: resolved.provider,
               model: resolved.model,
@@ -3016,6 +2977,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           provider: selection.provider,
           model: selection.model,
           attachedSessions: ctx.agents.list().length,
+          home: homedir(),
           canOpenPath: canOpenPaths(),
         }))
       },
@@ -3531,6 +3493,86 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             message: error instanceof Error ? error.message : String(error),
             details: { baseURL },
           })
+        }
+      },
+    },
+
+    // Thin delegation to the optional tunnel service: without it the roster
+    // reads empty and the verbs name the reason (never a bare `internal`).
+    remote: {
+      list(request) {
+        return Promise.resolve(ok(request, { devices: ctx.get('remoteTunnels')?.list() ?? [] }))
+      },
+
+      async connect(request) {
+        const tunnels = ctx.get('remoteTunnels')
+        if (tunnels === undefined) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: 'the remote-tunnels service is not composed in this build.',
+            details: { id: request.payload.id },
+          })
+        }
+        try {
+          return ok(request, { device: await tunnels.connect(request.payload.id) })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { id: request.payload.id },
+          })
+        }
+      },
+
+      async disconnect(request) {
+        const tunnels = ctx.get('remoteTunnels')
+        if (tunnels === undefined) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: 'the remote-tunnels service is not composed in this build.',
+            details: { id: request.payload.id },
+          })
+        }
+        try {
+          return ok(request, { device: await tunnels.disconnect(request.payload.id) })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'remote-tunnel-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { id: request.payload.id },
+          })
+        }
+      },
+    },
+
+    v4Monitor: {
+      async state(request) {
+        const monitor = ctx.get('v4Monitor')
+        if (monitor === undefined) {
+          return Promise.resolve(ok(request, { state: null }))
+        }
+        try {
+          const state = await monitor.fetchState(request.payload.force ?? false)
+          return ok(request, { state: state as unknown as V4MonitorStateView })
+        } catch {
+          return ok(request, { state: null })
+        }
+      },
+    },
+
+    balance: {
+      async get(request) {
+        const service = ctx.get('deepseekBalance') as
+          | { fetchBalance: (force?: boolean) => Promise<BalanceView | null> }
+          | undefined
+        if (service === undefined) {
+          return Promise.resolve(ok(request, { balance: null }))
+        }
+        try {
+          const balance = await service.fetchBalance(request.payload.force ?? false)
+          return ok(request, { balance })
+        } catch {
+          return ok(request, { balance: null })
         }
       },
     },

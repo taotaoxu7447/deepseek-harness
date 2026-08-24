@@ -31,4 +31,4 @@
 - 连接线文案读取尝试次数草稿，重试预算被编辑时降级说明即时跟随。
 - 模型可见⟺可记录 不受影响：这只是渲染器与控制器改动，设置文档与线路格式均未变化。
 
-关联：[2026-08-17-vision-chain-protocols-effort-presets](2026-08-17-vision-chain-protocols-effort-presets.md)。
+关联：[2026-08-17-vision-chain-protocols-effort-presets](2026-08-17-vision-chain-protocols-effort-presets.zh.md)。

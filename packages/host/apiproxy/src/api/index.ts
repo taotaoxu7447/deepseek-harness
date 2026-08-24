@@ -16,6 +16,9 @@ import type { SettingsApi } from './settings.ts'
 import type { CredentialsApi } from './credentials.ts'
 import type { LlmApi } from './llm.ts'
 import type { VisionApi } from './vision.ts'
+import type { RemoteApi } from './remote.ts'
+import type { V4MonitorApi } from './v4-monitor.ts'
+import type { BalanceApi } from './balance.ts'
 import type { DownloadsApi } from './downloads.ts'
 import type { ClientResponse, RpcReceipt } from './rpc.ts'
 
@@ -33,6 +36,9 @@ export interface ApiProxy {
   credentials: CredentialsApi
   llm: LlmApi
   vision: VisionApi
+  remote: RemoteApi
+  v4Monitor: V4MonitorApi
+  balance: BalanceApi
   /** Host-only download surfaces (GET, no wire envelope); absent from IApiClient. */
   downloads: DownloadsApi
   /**
@@ -63,6 +69,9 @@ export type { GoalsApi, GoalId, GoalRef } from './goals.ts'
 export type { SettingsApi, SettingsNamespaceView, SettingsPathOpView, SettingsSecretView } from './settings.ts'
 export type { CredentialsApi, CredentialView } from './credentials.ts'
 export type { ConfigurableProviderView, DiscoveredModelView, LlmApi } from './llm.ts'
+export type { RemoteApi, RemoteDeviceView, RemoteTunnelPhase } from './remote.ts'
+export type { V4MonitorApi, V4MonitorStateView, V4SlotView, V4HistoryItemView, V4EngineView, V4SlotStateView, V4SlotParamsView } from './v4-monitor.ts'
+export type { BalanceApi, BalanceView } from './balance.ts'
 export type { DownloadsApi } from './downloads.ts'
 export type { ApprovalResponsePayload } from './approvals.ts'
 

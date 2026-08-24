@@ -11,12 +11,13 @@
  * display name and wire protocol of a pi-ai route the adapter does not ship —
  * the two fields the create card asked that route for, editable here for the
  * same reason).
- * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
- * the models under one provider disagree about it, so a provider-scoped
- * control can only be set to a value some of them reject. The composer's
- * model picker offers each model its own levels; `settings.yaml` keeps the
- * profile field for a deployment that knows its route. Everything else stays
- * owned by `settings.yaml`. Profile edits land as minimal `settings.mutate`
+ * Reasoning effort is deliberately absent at the PROVIDER level: it is a
+ * per-MODEL capability, and the models under one provider disagree about it,
+ * so a provider-scoped control can only be set to a value some of them
+ * reject. The model list below carries the per-model declaration (levels and
+ * their wire names), the composer's model picker offers each model its own
+ * levels, and `settings.yaml` keeps the profile field for a deployment that
+ * knows its route. Everything else stays owned by `settings.yaml`. Profile edits land as minimal `settings.mutate`
  * path ops against the stored section — the card names only the fields it can
  * see instead of rebuilding the whole subtree from a partial descriptor.
  */
@@ -25,15 +26,16 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  deletePath, getPath, hasPath, nodeAtPath, rehydrateSchema, setPath, validateDraft,
-} from '@deepseek-ai/dsh-client-schema-form'
-import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
+import {
+  formatStreamIdleTimeout, parseStreamIdleTimeout, STREAM_IDLE_TIMEOUT_PLACEHOLDER_S,
+} from './stream-idle-timeout.ts'
+import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -61,6 +63,8 @@ export interface ProviderEditorProps {
   declared?: boolean
   /** The owning namespace view (schema, layers, secrets). */
   namespace: SettingsNamespaceView
+  /** Settings-owned synchronous schema and immutable path operations. */
+  schema: SettingsSchemaOperations
   /** Path from the section root to this provider's profile. */
   settingsPath: readonly string[]
   /** Wire faces for writes and for interrogating a provider endpoint. */
@@ -86,8 +90,12 @@ export interface ProviderEditorProps {
 }
 
 /** A user-section subtree as a plain draft object (absent → empty). */
-function draftAt(namespace: SettingsNamespaceView, path: readonly string[]): Record<string, unknown> {
-  const subtree = getPath(namespace.user, path)
+function draftAt(
+  schema: SettingsSchemaOperations,
+  namespace: SettingsNamespaceView,
+  path: readonly string[],
+): Record<string, unknown> {
+  const subtree = schema.getPath(namespace.user, path)
   if (typeof subtree !== 'object' || subtree === null || Array.isArray(subtree)) return {}
   return structuredClone(subtree) as Record<string, unknown>
 }
@@ -129,8 +137,13 @@ function layoutOf(ns: string): EditorLayout {
 }
 
 /** The credential reference this profile resolves keys through. */
-function refFor(namespace: SettingsNamespaceView, path: readonly string[], provider: string): string {
-  const profile = getPath(namespace.value, path)
+function refFor(
+  schema: SettingsSchemaOperations,
+  namespace: SettingsNamespaceView,
+  path: readonly string[],
+  provider: string,
+): string {
+  const profile = schema.getPath(namespace.value, path)
   const named = typeof profile === 'object' && profile !== null
     ? (profile as { apiKeyEnv?: unknown }).apiKeyEnv
     : undefined
@@ -143,8 +156,8 @@ function refFor(namespace: SettingsNamespaceView, path: readonly string[], provi
  * @returns the editor card.
  */
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
-  const { namespace, settingsPath, api, t } = props
-  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(namespace, settingsPath))
+  const { namespace, schema, settingsPath, api, t } = props
+  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath))
   const [keyDraft, setKeyDraft] = useState('')
   const [keyState, setKeyState] = useState<CredentialView | undefined>(undefined)
   const [busy, setBusy] = useState(false)
@@ -153,22 +166,22 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // derived fields in the draft prevents a pushed namespace refresh from
   // turning them into deletions when the following credential write is retried.
   const [committedOriginal, setCommittedOriginal] = useState<unknown>(
-    () => getPath(namespace.user, settingsPath),
+    () => schema.getPath(namespace.user, settingsPath),
   )
   const [expectedRevision, setExpectedRevision] = useState(() => namespace.revision)
-  const root = useMemo(() => rehydrateSchema(namespace.schema), [namespace.schema])
-  const node = useMemo(() => nodeAtPath(root, settingsPath), [root, settingsPath])
-  const fallback = getPath(namespace.value, settingsPath)
+  const root = useMemo(() => schema.rehydrate(namespace.schema), [namespace.schema, schema])
+  const node = useMemo(() => schema.nodeAtPath(root, settingsPath), [root, schema, settingsPath])
+  const fallback = schema.getPath(namespace.value, settingsPath)
   const disabled = props.readOnly || busy
   const layout = layoutOf(namespace.ns)
-  const keyRef = refFor(namespace, settingsPath, props.provider)
+  const keyRef = refFor(schema, namespace, settingsPath, props.provider)
   // The same schema read the create card makes, so the choices offered here
   // and there cannot drift apart: both come from the adapter's own `Config`.
   // Only the pi-ai layout has a per-route protocol for the read to find, and
   // it rehydrates the whole section schema, so the other layouts skip it.
   const protocols = useMemo(
-    () => layout === 'pi-ai' ? protocolChoices(namespace) : [],
-    [layout, namespace],
+    () => layout === 'pi-ai' ? protocolChoices(namespace, schema) : [],
+    [layout, namespace, schema],
   )
 
   useEffect(() => {
@@ -189,8 +202,31 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   }, [api.credentials, keyRef])
 
   const stringAt = (source: unknown, key: string): string | undefined => {
-    const value = getPath(source, [key])
+    const value = schema.getPath(source, [key])
     return typeof value === 'string' && value.trim().length > 0 ? value : undefined
+  }
+  /** A root key's numeric value, or `undefined` when unset or not a number. */
+  const numberAt = (source: unknown, key: string): number | undefined => {
+    const value = schema.getPath(source, [key])
+    return typeof value === 'number' ? value : undefined
+  }
+  // The stream-idle field is edited as seconds while the adapters store ms;
+  // the buffer holds half-typed text the parse cannot carry (same contract as
+  // the model rows' capacity buffers), and unreadable text blocks Apply below.
+  const [idleEditing, setIdleEditing] = useState<string | undefined>(undefined)
+  const idleText = idleEditing ?? formatStreamIdleTimeout(numberAt(draft, 'streamIdleTimeoutMs'))
+  const idleParsed = parseStreamIdleTimeout(idleText)
+  const idleInvalid = idleParsed !== undefined && Number.isNaN(idleParsed)
+  const idlePlaceholder = formatStreamIdleTimeout(numberAt(fallback, 'streamIdleTimeoutMs'))
+    || STREAM_IDLE_TIMEOUT_PLACEHOLDER_S
+  const editIdleTimeout = (text: string): void => {
+    setIdleEditing(text)
+    const parsed = parseStreamIdleTimeout(text)
+    if (parsed === undefined) {
+      setDraft(current => schema.deletePath(current, ['streamIdleTimeoutMs']))
+    } else if (!Number.isNaN(parsed)) {
+      setDraft(current => schema.setPath(current, ['streamIdleTimeoutMs'], parsed))
+    }
   }
   const setField = (key: string, next: string | undefined): void => {
     // A value of nothing but whitespace is cleared, not stored: `stringAt`
@@ -198,12 +234,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // while the draft still carried the spaces into `settings.yaml`, where
     // both adapters would accept that non-empty string as a real value.
     const value = next === undefined || next.trim().length === 0 ? undefined : next
-    setDraft(current => value === undefined ? deletePath(current, [key]) : setPath(current, [key], value))
+    setDraft(current => value === undefined
+      ? schema.deletePath(current, [key])
+      : schema.setPath(current, [key], value))
   }
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
-  const modelFailure = validateDeepSeekModels(getPath(draft, ['models']))
+  const modelFailure = validateDeepSeekModels(schema.getPath(draft, ['models']))
   const keyFailure = apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
@@ -240,14 +278,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // about to store a key. Otherwise the provider keeps its native auth path.
     const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
-      ? setPath(draft, ['apiKeyEnv'], keyRef)
+      ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
     if (props.credentialOnly !== true) {
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
       // nothing but this function decides what is written.
-      const failure = validateDeepSeekModels(getPath(next, ['models']))
+      const failure = validateDeepSeekModels(schema.getPath(next, ['models']))
       /* v8 ignore next 3 -- unreachable from the card: the same failure disables submit */
       if (failure !== undefined) {
         return `${t('model')} ${String(failure.index + 1)}: ${t(failure.key)}`
@@ -255,7 +293,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     }
     /* v8 ignore next -- apply is only reachable from the rendered card, which required a resolved node */
     if (props.credentialOnly !== true && node !== undefined && settingsPath.length === 0) {
-      const sectionError = validateDraft(node, next)
+      const sectionError = schema.validate(node, next)
       if (sectionError !== undefined) return sectionError
     }
     const materializesNativeProfile = layout === 'pi-ai'
@@ -274,7 +312,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
           ? t('conflict')
           : response.result.error.message
       }
-      setCommittedOriginal(getPath(response.result.value.user, settingsPath))
+      setCommittedOriginal(schema.getPath(response.result.value.user, settingsPath))
       setExpectedRevision(response.result.value.revision)
       setDraft(next)
     }
@@ -322,8 +360,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    * moment reset drops it, leaving the rows unchanged until a reload.
    */
   const inheritedModels = (): unknown => {
-    const pinned = getPath(namespace.base, [...settingsPath, 'models'])
-    return pinned ?? nodeAtPath(root, [...settingsPath, 'models'])?.meta.default
+    const pinned = schema.getPath(namespace.base, [...settingsPath, 'models'])
+    return pinned ?? schema.nodeAtPath(root, [...settingsPath, 'models'])?.meta.default
   }
 
   /**
@@ -336,11 +374,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // A whole-section `llm-deepseek` profile is a composition fact with no
     // per-route identity for its schema to carry, hence the family test.
     const ownsIdentity = family === 'pi-ai' && props.declared === true
-    const customModels = getPath(draft, ['models'])
-    const modelsOverridden = hasPath(draft, ['models'])
+    const customModels = schema.getPath(draft, ['models'])
+    const modelsOverridden = schema.hasPath(draft, ['models'])
     const models = modelDrafts(modelsOverridden ? customModels : inheritedModels())
-    const defaultContextWindow = getPath(fallback, ['defaultContextWindow'])
-    const defaultMaxTokens = getPath(fallback, ['maxTokens'])
+    const defaultContextWindow = schema.getPath(fallback, ['defaultContextWindow'])
+    const defaultMaxTokens = schema.getPath(fallback, ['maxTokens'])
     const keyPlaceholder = keyLocked
       ? t('keyEnvLocked')
       : keyState?.configured === true && props.credentialRequired !== true
@@ -353,9 +391,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       t,
       disabled,
       onChange: (next: Record<string, unknown>[]) => {
-        setDraft(current => setPath(current, ['models'], next))
+        setDraft(current => schema.setPath(current, ['models'], next))
       },
-      onReset: () => { setDraft(current => deletePath(current, ['models'])) },
+      onReset: () => { setDraft(current => schema.deletePath(current, ['models'])) },
     }
     return (
       <>
@@ -397,7 +435,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                     // the answer the route id. Reading the effective value
                     // instead would echo the stored override back as the
                     // thing clearing restores.
-                    placeholder={stringAt(getPath(namespace.base, settingsPath), 'displayName')
+                    placeholder={stringAt(schema.getPath(namespace.base, settingsPath), 'displayName')
                       ?? props.provider}
                     aria-label={t('customDisplayName')}
                     disabled={disabled}
@@ -421,6 +459,26 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   setField('baseURL', event.target.value === '' ? undefined : event.target.value)
                 }}
               />
+            </div>
+            {/* Both adapter families accept the same root-level key — the
+                deepseek section and a pi-ai profile alike — so one field
+                serves both layouts. */}
+            <div className={styles['field']}>
+              <span className={styles['fieldLabel']}>{t('streamIdleTimeout')}</span>
+              <input
+                className={styles['input']}
+                type="text"
+                inputMode="decimal"
+                value={idleText}
+                placeholder={idlePlaceholder}
+                aria-label={t('streamIdleTimeout')}
+                aria-invalid={idleInvalid || undefined}
+                disabled={disabled}
+                onChange={(event) => { editIdleTimeout(event.target.value) }}
+              />
+              {idleInvalid
+                ? <p className={styles['error']}>{t('streamIdleTimeoutInvalid')}</p>
+                : <p className={styles['advancedHint']}>{t('streamIdleTimeoutHint')}</p>}
             </div>
             {/* The protocol sits beside the endpoint it describes, as it does
                 on the create card. */}
@@ -493,7 +551,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       <EditorFooter
         t={t}
         busy={busy}
-        submitDisabled={disabled || layout === 'unknown'
+        submitDisabled={disabled || layout === 'unknown' || idleInvalid
           || (props.credentialOnly !== true && modelFailure !== undefined)
           || shownKeyFailure !== undefined
           || (props.credentialRequired === true && keyValue.length === 0)}

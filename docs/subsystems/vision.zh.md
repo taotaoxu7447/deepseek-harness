@@ -2,13 +2,13 @@
 
 [English](vision.md) | 中文
 
-视觉接缝通过可替换的视觉模型后端把图片转换为面向模型的文本。它的存在让纯文本主路由也能推理图片文件:侧车视觉模型生成描述,主模型经 [`view_image`](../tool-catalog.md#deepseek-aidsh-tool-vision) 把它当作普通工具结果文本来消费。
+视觉接缝通过可替换的视觉模型后端把图片转换为面向模型的文本。它的存在让纯文本主路由也能推理图片文件:侧车视觉模型生成描述,主模型经 [`view_image`](../tool-catalog.zh.md#deepseek-aidsh-tool-vision) 把它当作普通工具结果文本来消费。
 
 来源:[`packages/vision/vision/src/index.ts`](../../packages/vision/vision/src/index.ts)
 
 ## Provider selection
 
-Provider 注册进 `ctx.vision`,且不校验图片本身 —— 媒体类型与字节上限校验属于调用方([`dsh-tool-vision`](../../packages/vision/tool-vision/README.md) 在描述之前先走附件服务的图片策略)。选择在执行时解析,与注册顺序无关:配置的 `provider` id 必须已注册且可用(`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(`VISION_PROVIDER_UNAVAILABLE`、`VISION_PROVIDER_AMBIGUOUS`)。重复的注册 id 抛出 `VISION_DUPLICATE_PROVIDER`;后端调用内部的失败呈现为 `VISION_ABORTED`(取消与 Provider 自身超时)或 `VISION_PROVIDER_ERROR`。Provider 也可能在任何请求发出之前拒绝:链 Provider 的输入估算守卫抛出 `VISION_INPUT_TOO_LARGE`(估算公式见[其 README](../../packages/vision/vision-qwen/README.md#input-guard))。
+Provider 注册进 `ctx.vision`,且不校验图片本身 —— 媒体类型与字节上限校验属于调用方([`dsh-tool-vision`](../../packages/vision/tool-vision/README.zh.md) 在描述之前先走附件服务的图片策略)。选择在执行时解析,与注册顺序无关:配置的 `provider` id 必须已注册且可用(`VISION_PROVIDER_CONFIGURED_MISSING` / `VISION_PROVIDER_CONFIGURED_UNAVAILABLE`);未配置时,必须恰好有一个可用 Provider(`VISION_PROVIDER_UNAVAILABLE`、`VISION_PROVIDER_AMBIGUOUS`)。重复的注册 id 抛出 `VISION_DUPLICATE_PROVIDER`;后端调用内部的失败呈现为 `VISION_ABORTED`(取消与 Provider 自身超时)或 `VISION_PROVIDER_ERROR`。Provider 也可能在任何请求发出之前拒绝:链 Provider 的输入估算守卫抛出 `VISION_INPUT_TOO_LARGE`(估算公式见[其 README](../../packages/vision/vision-qwen/README.zh.md#input-guard))。
 
 ## Deployment
 
@@ -34,7 +34,7 @@ Provider 注册进 `ctx.vision`,且不校验图片本身 —— 媒体类型与�
 
 ## Cordis API
 
-Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
 <a id="ctxvision--visionruntime"></a>
 
@@ -81,5 +81,5 @@ async describe(request: VisionDescribeRequest, signal?: AbortSignal): Promise<Vi
 hasUsableProvider(): boolean
 ```
 
-Source: [`packages/vision/vision/src/index.ts:53`](../../packages/vision/vision/src/index.ts)
+Source: [`packages/vision/vision/src/index.ts`](../../packages/vision/vision/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -27,11 +27,15 @@ import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
 import { VisionCard } from './VisionCard.tsx'
+import { RemoteCard } from './RemoteCard.tsx'
+import { LocalV4Card } from './LocalV4Card.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
 import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
 import { VISION_NS, VisionCardController } from './vision-card-controller.ts'
+import { REMOTE_NS, RemoteCardController } from './remote-card-controller.ts'
+import { LOCAL_V4_NS, LocalV4CardController } from './local-v4-card-controller.ts'
 import { en, zh } from './locales.ts'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
@@ -47,7 +51,10 @@ export type { AgentLoopCardFace, AgentLoopCardState } from './agent-loop-card-co
 export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
 export type { VisionCardFace, VisionCardState } from './vision-card-controller.ts'
-
+export type { RemoteCardFace, RemoteCardState } from './remote-card-controller.ts'
+export type { LocalV4CardFace, LocalV4CardState } from './local-v4-card-controller.ts'
+export { LocalV4Card } from './LocalV4Card.tsx'
+export type { LocalV4CardProps } from './LocalV4Card.tsx'
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
 
@@ -67,35 +74,27 @@ export function apply(ctx: ClientContext): void {
   const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }))
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
   const vision = new VisionCardController(ctx.settingsScope.bind({ namespace: VISION_NS }), api)
-
+  const remote = new RemoteCardController(ctx.settingsScope.bind({ namespace: REMOTE_NS }), api)
+  const localV4 = new LocalV4CardController(ctx.settingsScope.bind({ namespace: LOCAL_V4_NS }))
   // The credential a card reports is not part of any settings section, so its
   // scope publishes nothing when one is written. This is the only signal that
   // a key written on another surface reached the Host.
   ctx.effect(
-    () => ctx.remote.$on('credentials/updated', (ref) => { webSearch.refreshCredential(ref) }),
+    () => ctx.remote.$on('credentials/reference-updated', (ref) => { webSearch.refreshCredential(ref) }),
     'ui-settings-plugins: credential invalidations',
   )
 
-  // Which namespaces the Host serves is a registration fact the wire does not
-  // announce, so the directory re-reads on the two signals that can carry a
-  // changed composition: a settings document commit and a reconnect.
+  // Which namespaces the Host serves comes from the shared describe mirror,
+  // whose owning plugin already refreshes it on document commits and
+  // reconnects — the tab only derives.
   const configurable = new ConfigurablePluginsTabController(
-    api, () => ctx.slots.entries('settings.plugin.item'))
+    ctx.settingsScope.describe(), () => ctx.slots.entries('settings.plugin.item'))
   ctx.effect(() => () => { configurable.dispose() }, 'ui-settings-plugins: tab directory')
-  ctx.effect(
-    () => ctx.remote.$on('settings/document-updated', () => { void configurable.load() }),
-    'ui-settings-plugins: served-namespace invalidations',
-  )
-  ctx.effect(
-    () => ctx.on('connection/reset', () => { void configurable.load() }),
-    'ui-settings-plugins: served-namespace reconnect',
-  )
   // A card registered after the first read joins the list without a wire call.
   ctx.effect(
     () => ctx.slots.subscribe('settings.plugin.item', () => { configurable.refresh() }),
     'ui-settings-plugins: card ledger',
   )
-  void configurable.load()
 
   let tabsVersion = -1
   let tabsRevision = -1
@@ -181,5 +180,17 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => vision.inject(),
     }, VisionCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: REMOTE_NS,
+      locale: NS,
+      inject: () => remote.inject(),
+    }, RemoteCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: LOCAL_V4_NS,
+      locale: NS,
+      inject: () => localV4.inject(),
+    }, LocalV4Card)
   })
 }

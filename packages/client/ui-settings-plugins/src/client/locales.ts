@@ -30,8 +30,18 @@ export type PluginsSettingsLocaleKey =
   | 'visionEffortEnabled' | 'visionEffortEnabledHint' | 'visionEffortEnabledMimoHint'
   | 'visionThinkingBudget' | 'visionThinkingBudgetHint'
   | 'visionContextTokens' | 'visionContextTokensHint'
-  | 'visionMaxInputTokens' | 'visionMaxInputTokensHint'
-
+  | 'visionMaxTokens' | 'visionMaxTokensHint'
+  | 'remoteTitle' | 'remoteDescription' | 'remoteEmpty' | 'remoteAddDevice' | 'remoteRemove'
+  | 'remoteId' | 'remoteIdHint' | 'remoteLabel' | 'remoteLabelHint'
+  | 'remoteSshTarget' | 'remoteSshTargetHint'
+  | 'remoteRemotePort' | 'remoteRemotePortHint' | 'remoteLocalPort' | 'remoteLocalPortHint'
+  | 'remoteAutoConnect' | 'remoteAutoConnectHint'
+  | 'remoteConnect' | 'remoteDisconnect' | 'remoteOpenExternal' | 'remoteOpenHere'
+  | 'remoteStateUnknown' | 'remoteStateDisconnected' | 'remoteStateConnecting' | 'remoteStateReady' | 'remoteStateFailed'
+  | 'localV4Title' | 'localV4Description'
+  | 'localV4MonitorUrl' | 'localV4MonitorUrlHint' | 'localV4Passcode' | 'localV4PasscodeHint'
+  | 'localV4PasscodeSet' | 'localV4PasscodeUnset' | 'localV4PollInterval' | 'localV4PollIntervalHint'
+  | 'localV4AutoCollapse' | 'localV4AutoCollapseHint'
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
   nav: 'Plugins',
@@ -128,8 +138,46 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   visionThinkingBudgetHint: 'Token cap on the model\'s thinking; Anthropic requires at least 1024 and below the completion budget. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
   visionContextTokens: 'Context size (tokens)',
   visionContextTokensHint: 'The model\'s advertised context window; saving fails if the completion budget exceeds it. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
-  visionMaxInputTokens: 'Input limit (tokens)',
-  visionMaxInputTokensHint: 'A describe whose estimated input (text plus image) exceeds this is refused before any request is sent. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
+  visionMaxTokens: 'Output limit (tokens)',
+  visionMaxTokensHint: 'The completion budget of one description, sent as max_tokens / max_output_tokens. Blank uses the built-in 1024. Accepts k/m suffixes (\u00d71024/\u00d71024\u00b2).',
+  remoteTitle: 'Remote devices',
+  remoteDescription: 'dsh hosts on other machines, reached through SSH tunnels; a connected device opens its full interface here.',
+  remoteEmpty: 'No devices yet. Add one with an ssh config alias you have already connected to once in a terminal.',
+  remoteAddDevice: 'Add device',
+  remoteRemove: 'Remove',
+  remoteId: 'Device id',
+  remoteIdHint: 'Stable name used in errors and commands.',
+  remoteLabel: 'Display name',
+  remoteLabelHint: 'Shown in the list; blank shows the id.',
+  remoteSshTarget: 'SSH target',
+  remoteSshTargetHint: 'A Host alias from ~/.ssh/config (user, port, and key live there). Log in once in a terminal first so the host key is trusted.',
+  remoteRemotePort: 'Remote dsh port',
+  remoteRemotePortHint: 'The web port the remote dsh listens on. Blank uses 3080.',
+  remoteLocalPort: 'Local port',
+  remoteLocalPortHint: 'The loopback port the tunnel binds here. Blank assigns one automatically from 13389.',
+  remoteAutoConnect: 'Connect automatically',
+  remoteAutoConnectHint: 'On connects the tunnel as soon as this device appears in the list.',
+  remoteConnect: 'Connect',
+  remoteDisconnect: 'Disconnect',
+  remoteOpenExternal: 'Open in new tab',
+  remoteOpenHere: 'Open in this window',
+  remoteStateUnknown: 'Checking\u2026',
+  remoteStateDisconnected: 'Disconnected',
+  remoteStateConnecting: 'Connecting\u2026',
+  remoteStateReady: 'Connected',
+  remoteStateFailed: 'Failed',
+  localV4Title: 'Local compute monitor',
+  localV4Description: 'Live cluster metrics shown above the composer. Turn the strip on or off from the sidebar.',
+  localV4MonitorUrl: 'Monitor service URL',
+  localV4MonitorUrlHint: 'Base URL of the cluster monitoring service.',
+  localV4Passcode: 'Invite code',
+  localV4PasscodeHint: 'Required to connect. Leave blank to keep the current code.',
+  localV4PasscodeSet: 'Invite code configured',
+  localV4PasscodeUnset: 'No invite code configured',
+  localV4PollInterval: 'Polling interval (ms)',
+  localV4PollIntervalHint: 'Live status refresh interval in ms (recommended 2000-5000ms).',
+  localV4AutoCollapse: 'Collapse to compact bar by default',
+  localV4AutoCollapseHint: 'Show as a minimal single-line status capsule by default; click to expand dual slot details.',
 }
 
 /** Simplified Chinese copy. */
@@ -228,6 +276,44 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   visionThinkingBudgetHint: '模型思考阶段的 token 上限；Anthropic 要求至少 1024 且低于输出上限。可带 k/m 后缀（×1024/×1024²）。',
   visionContextTokens: '上下文大小（token）',
   visionContextTokensHint: '模型标称的上下文窗口；输出上限超过它时保存会被拒绝。可带 k/m 后缀（×1024/×1024²）。',
-  visionMaxInputTokens: '输入上限（token）',
-  visionMaxInputTokensHint: '估算输入（文本加图片）超过此值的 describe 会在发出请求前被拒绝。可带 k/m 后缀（×1024/×1024²）。',
+  visionMaxTokens: '输出上限（token）',
+  visionMaxTokensHint: '一次描述的最大输出 token 数，作为 max_tokens / max_output_tokens 发送；留空使用内置 1024。可带 k/m 后缀（×1024/×1024²）。',
+  remoteTitle: '远程设备',
+  remoteDescription: '其他设备上的 dsh，通过 SSH 隧道连接；连上后可在这里打开它的完整界面。',
+  remoteEmpty: '还没有设备。添加一台：填一个你已经在终端里 ssh 连过一次的 ssh config 别名。',
+  remoteAddDevice: '添加设备',
+  remoteRemove: '移除',
+  remoteId: '设备 id',
+  remoteIdHint: '稳定名称，用于错误信息与命令。',
+  remoteLabel: '显示名',
+  remoteLabelHint: '列表里显示的名字；留空则显示 id。',
+  remoteSshTarget: 'SSH 目标',
+  remoteSshTargetHint: '~/.ssh/config 里的 Host 别名（用户、端口、密钥都在那里配置）。请先在终端里 ssh 连过一次，让主机密钥被信任。',
+  remoteRemotePort: '远端 dsh 端口',
+  remoteRemotePortHint: '远端 dsh 监听的 Web 端口，留空为 3080。',
+  remoteLocalPort: '本地端口',
+  remoteLocalPortHint: '隧道在本机绑定的 loopback 端口，留空则从 13389 起自动分配。',
+  remoteAutoConnect: '自动连接',
+  remoteAutoConnectHint: '开启后，该设备一出现在清单中就自动连接隧道。',
+  remoteConnect: '连接',
+  remoteDisconnect: '断开',
+  remoteOpenExternal: '在新标签页打开',
+  remoteOpenHere: '在本窗口打开',
+  remoteStateUnknown: '查询中…',
+  remoteStateDisconnected: '未连接',
+  remoteStateConnecting: '连接中…',
+  remoteStateReady: '已连接',
+  remoteStateFailed: '失败',
+  localV4Title: '本地算力监控',
+  localV4Description: '在输入框上方显示集群实时指标。开关在侧栏。',
+  localV4MonitorUrl: '监控服务地址',
+  localV4MonitorUrlHint: '集群监控服务的基址。',
+  localV4Passcode: '邀请码',
+  localV4PasscodeHint: '连接监控所需。留空表示保持当前邀请码。',
+  localV4PasscodeSet: '已配置邀请码',
+  localV4PasscodeUnset: '未配置邀请码',
+  localV4PollInterval: '轮询刷新周期 (ms)',
+  localV4PollIntervalHint: '实时状态刷新周期，建议 2000~5000 毫秒。',
+  localV4AutoCollapse: '默认折叠为单行胶囊',
+  localV4AutoCollapseHint: '开启后状态条默认以极简单行呈现，点击可展开双 Slot 详情。',
 }

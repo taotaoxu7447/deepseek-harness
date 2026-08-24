@@ -34,4 +34,4 @@ thinking/reasoning 请求在 Responses 与 anthropic-带-thinking 上省略 `tem
 - `VisionCard` 不再传 `onReset`（列表编辑器的字段永远不可能处于覆盖态）；`FieldProps.onReset` 恰为这种情况改为可选。
 - 封闭联合的 `assertNever` 默认分支携带 `v8 ignore` 理由，而不是构造恶意类型转换的测试，与既有 compaction 包一致。
 
-关联：[2026-08-16-vision-sidecar-seam](2026-08-16-vision-sidecar-seam.md)。
+关联：[2026-08-16-vision-sidecar-seam](2026-08-16-vision-sidecar-seam.zh.md)。

@@ -50,6 +50,12 @@ flowchart LR
   cfg --> plugin_dsh_base_vision
   plugin_dsh_base_vision_qwen["vision-qwen<br/>@deepseek-ai/dsh-vision-qwen"]
   cfg --> plugin_dsh_base_vision_qwen
+  plugin_dsh_base_remote_tunnels["remote-tunnels<br/>@deepseek-ai/dsh-remote-tunnels"]
+  cfg --> plugin_dsh_base_remote_tunnels
+  plugin_dsh_base_v4_monitor["v4-monitor<br/>@deepseek-ai/dsh-v4-monitor"]
+  cfg --> plugin_dsh_base_v4_monitor
+  plugin_dsh_base_deepseek_balance["deepseek-balance<br/>@deepseek-ai/dsh-deepseek-balance"]
+  cfg --> plugin_dsh_base_deepseek_balance
   plugin_dsh_base_session_query_sqlite["session-query-sqlite<br/>@deepseek-ai/dsh-session-query-sqlite"]
   cfg --> plugin_dsh_base_session_query_sqlite
   plugin_dsh_base_session_projection["session-projection<br/>@deepseek-ai/dsh-session-projection"]
@@ -193,6 +199,9 @@ flowchart LR
 | `attachment-local` | `@deepseek-ai/dsh-attachment-local` |
 | `vision` | `@deepseek-ai/dsh-vision` |
 | `vision-qwen` | `@deepseek-ai/dsh-vision-qwen` |
+| `remote-tunnels` | `@deepseek-ai/dsh-remote-tunnels` |
+| `v4-monitor` | `@deepseek-ai/dsh-v4-monitor` |
+| `deepseek-balance` | `@deepseek-ai/dsh-deepseek-balance` |
 | `session-query-sqlite` | `@deepseek-ai/dsh-session-query-sqlite` |
 | `session-projection` | `@deepseek-ai/dsh-session-projection` |
 | `session-telemetry-otel` | `@deepseek-ai/dsh-session-telemetry-otel` |

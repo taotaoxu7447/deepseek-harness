@@ -12,16 +12,17 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
-import type { createLayoutStore } from './stores.ts'
+import type { createLayoutStore, RemoteTab } from './stores.ts'
 import css from './AppFrame.module.css'
 
-/** Full composed props: runtime share + child-slot render share + store share. */
+/** Full composed props: runtime share + child-slot render share + store share + locale seat. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
   & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
+  & PropsLocale<'layout'>
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode }) {
@@ -89,6 +90,7 @@ export function AppFrame({
   useSessions,
   actions,
   renderSlot,
+  t,
 }: AppFrameProps) {
   const panels = useStore(s => s)
   const detailsSession = useSessions((s) => {
@@ -143,6 +145,16 @@ export function AppFrame({
   const colsRef = useRef(cols)
   colsRef.current = cols
 
+  // The window's browser-style tabs: the local Harness plus one tab per open
+  // remote surface. The strip renders once any remote tab exists; while a
+  // remote tab is staged, the columns stay mounted but hidden and the
+  // remote's iframe takes the stage, so switching back is instant and the
+  // local session UI never loses state.
+  const remoteTabs: readonly RemoteTab[] = panels.remoteTabs
+  const stagedRemote = panels.activeRemote === undefined
+    ? undefined
+    : remoteTabs.find(tab => tab.id === panels.activeRemote)
+
   // The drag base is the rendered width captured at drag start (grabbing a
   // concession-clamped panel must not jump back to the stored preference);
   // it stays frozen for the whole gesture so dx deltas do not compound.
@@ -162,40 +174,103 @@ export function AppFrame({
   }, [actions])
 
   return (
-    <div
-      ref={frameRef}
-      className={css.frame}
-      style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
-      data-sidebar-collapsed={sidebarCollapsed || undefined}
-      data-details-collapsed={cols.details === 0 || undefined}
-      data-dragging={dragging || undefined}
-    >
-      <div className={css.sidebarCol}>
-        {/* Render-site slot call with live concession output: a closed
-            sidebar keeps the mounted slot at the compact-rail width, and the
-            component sees its rendered state as owner params decided here
-            (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). */}
-        {renderSlot('sidebar', {
-          collapsed: sidebarCollapsed,
-          width: cols.sidebar,
-        })}
+    <div className={css.shell}>
+      {remoteTabs.length > 0
+        ? (
+          <div className={css.tabStrip} role="tablist" aria-label={t('tabs.strip.label')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={stagedRemote === undefined}
+              className={css.tab}
+              data-active={stagedRemote === undefined || undefined}
+              title={t('tabs.local.label')}
+              onClick={() => { actions.showLocalTab() }}
+            >
+              <span className={css.tabLabel}>{t('tabs.local')}</span>
+            </button>
+            {remoteTabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={stagedRemote?.id === tab.id}
+                className={css.tab}
+                data-active={stagedRemote?.id === tab.id || undefined}
+                title={tab.url}
+                onClick={() => { actions.activateRemoteTab(tab.id) }}
+              >
+                <span className={css.tabLabel}>{tab.label}</span>
+                <span
+                  role="button"
+                  aria-label={`${t('tabs.close')} ${tab.label}`}
+                  className={css.tabClose}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    actions.closeRemoteTab(tab.id)
+                  }}
+                >
+                  ×
+                </span>
+              </button>
+            ))}
+          </div>
+        )
+        : null}
+      {/* Every open remote surface keeps its iframe mounted (and its session
+          running); only the staged one is visible. The iframe key includes the
+          URL so a tunnel that came back on another port reloads fresh. */}
+      {remoteTabs.length > 0
+        ? (
+          <div className={css.remoteStage} hidden={stagedRemote === undefined}>
+            {remoteTabs.map(tab => (
+              <iframe
+                key={`${tab.id}@${tab.url}`}
+                className={css.remoteFrame}
+                hidden={stagedRemote?.id !== tab.id}
+                src={tab.url}
+                title={tab.label}
+              />
+            ))}
+          </div>
+        )
+        : null}
+      <div
+        ref={frameRef}
+        className={css.frame}
+        hidden={stagedRemote !== undefined}
+        style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
+        data-sidebar-collapsed={sidebarCollapsed || undefined}
+        data-details-collapsed={cols.details === 0 || undefined}
+        data-dragging={dragging || undefined}
+      >
+        <div className={css.sidebarCol}>
+          {/* Render-site slot call with live concession output: a closed
+              sidebar keeps the mounted slot at the compact-rail width, and the
+              component sees its rendered state as owner params decided here
+              (collapsed follows the resolved rail, so a derived auto-collapse
+              renders the rail UI too). */}
+          {renderSlot('sidebar', {
+            collapsed: sidebarCollapsed,
+            width: cols.sidebar,
+          })}
+        </div>
+        <>
+          {/* Both column occupants stay at fixed tree positions from first
+              paint — no loading gate: a bare status line reads worse than
+              the shell's own pending rendering. The conversation
+              is session-maybe; the strict details entry naturally renders
+              empty while no session is current. */}
+          <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+          <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+        </>
+        <div className={css.overlayLayer} data-shell-overlay>
+          {renderSlot('shell.overlay', {})}
+        </div>
+        {/* The collapsed rail is fixed-width: no resize handle while closed. */}
+        {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+        {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
       </div>
-      <>
-        {/* Both column occupants stay at fixed tree positions from first
-            paint — no loading gate: a bare status line reads worse than
-            the shell's own pending rendering. The conversation
-            is session-maybe; the strict details entry naturally renders
-            empty while no session is current. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
-      </>
-      <div className={css.overlayLayer} data-shell-overlay>
-        {renderSlot('shell.overlay', {})}
-      </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
     </div>
   )
 }

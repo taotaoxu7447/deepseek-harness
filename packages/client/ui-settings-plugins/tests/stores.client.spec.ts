@@ -8,9 +8,15 @@ import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-clie
 import { booleanField, CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
+import {
+  SettingsDescribeMirror, type SettingsMirrorSnapshot,
+} from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
 import { VisionCardController, type VisionSettings } from '../src/client/vision-card-controller.ts'
+import {
+  REMOTE_POLL_MS, RemoteCardController, type RemoteSettings, type RemoteTunnelState,
+} from '../src/client/remote-card-controller.ts'
 import type { IApiClient } from '@deepseek-ai/dsh-client-connection/client'
 
 /** Make the stub behave like a Host that accepts every write. */
@@ -557,7 +563,7 @@ describe('ConfigurablePluginsTabController', () => {
         },
       },
     }))
-    return { api: { settings: { describe } } as never, describe }
+    return { mirror: new SettingsDescribeMirror({ settings: { describe } } as never), describe }
   }
 
   /** Slot ledger stand-in: one stored entry per registered card key. */
@@ -567,9 +573,9 @@ describe('ConfigurablePluginsTabController', () => {
 
   it('dispatches the served namespaces a card claims, in card registration order', async () => {
     const settings = settingsApi(['bash', 'ui-theme', 'agent-loop'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('agent-loop', 'bash'))
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('agent-loop', 'bash'))
 
-    await controller.load()
+    await settings.mirror.ensure()
 
     // ui-theme is served but claimed by no card here — another surface owns
     // it. The order is the cards', not the Host's: plugin activation can
@@ -580,9 +586,9 @@ describe('ConfigurablePluginsTabController', () => {
 
   it('never dispatches a card whose namespace this deployment does not serve', async () => {
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash', 'web-search-deepseek'))
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash', 'web-search-deepseek'))
 
-    await controller.load()
+    await settings.mirror.ensure()
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
   })
@@ -590,8 +596,8 @@ describe('ConfigurablePluginsTabController', () => {
   it('takes a card registered after the read without asking the Host again', async () => {
     const settings = settingsApi(['bash'])
     let entries = ledger()
-    const controller = new ConfigurablePluginsTabController(settings.api, () => entries)
-    await controller.load()
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => entries)
+    await settings.mirror.ensure()
     expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual([])
 
     entries = ledger('bash')
@@ -601,34 +607,33 @@ describe('ConfigurablePluginsTabController', () => {
     expect(settings.describe).toHaveBeenCalledOnce()
   })
 
-  it('keeps the namespaces it knew when a read fails', async () => {
+  it('keeps the namespaces it knew when a refresh fails', async () => {
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash'))
-    await controller.load()
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash'))
+    await settings.mirror.ensure()
     settings.describe.mockRejectedValueOnce(new Error('offline'))
 
-    await controller.load()
+    await settings.mirror.load()
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
   })
 
-  it('publishes nothing once disposed, and never claims it was answered', async () => {
+  it('stops following the mirror once disposed, and never claims it was answered', async () => {
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash'))
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash'))
 
     controller.dispose()
-    await controller.load()
+    await settings.mirror.load()
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot())
       .toEqual({ loaded: false, namespaces: [] })
-    expect(settings.describe).not.toHaveBeenCalled()
   })
 
   it('ignores a slot-ledger change that arrives after disposal', async () => {
     const settings = settingsApi(['bash'])
     let entries = ledger()
-    const controller = new ConfigurablePluginsTabController(settings.api, () => entries)
-    await controller.load()
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => entries)
+    await settings.mirror.ensure()
 
     controller.dispose()
     entries = ledger('bash')
@@ -637,33 +642,49 @@ describe('ConfigurablePluginsTabController', () => {
     expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual([])
   })
 
-  it('drops a read a newer one superseded', async () => {
-    // The section re-reads on every settings-document invalidation, so a slow
-    // first answer must not overwrite the newer one that already landed.
-    const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash', 'agent-loop'))
-    const slow = Promise.withResolvers<unknown>()
-    settings.describe.mockReturnValueOnce(slow.promise as never)
-    const stale = controller.load()
+  it('ignores a mirror notification already queued when disposal starts', () => {
+    let notify = (): void => {}
+    let snapshot: SettingsMirrorSnapshot = {
+      status: 'ready' as const,
+      view: { writable: true, hasDocument: true, namespaces: [] },
+      error: null,
+    }
+    const describeFace = {
+      getSnapshot: () => snapshot,
+      subscribe: (listener: () => void) => {
+        notify = listener
+        return () => {}
+      },
+      ensure: () => Promise.resolve(),
+      acceptView: vi.fn(),
+    } as never
+    const controller = new ConfigurablePluginsTabController(describeFace, () => ledger('bash'))
+    expect(controller.inject().hooks.configurablePlugins.getSnapshot())
+      .toEqual({ loaded: true, namespaces: [] })
 
-    await controller.load()
-    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
-    slow.resolve({
-      rpcId: 's-0',
-      result: { ok: true, value: { writable: true, hasDocument: true, namespaces: [
-        { ns: 'agent-loop', schema: {}, value: {}, applies: 'live', secrets: [], revision: 0 },
-      ] } },
-    })
-    await stale
+    controller.dispose()
+    snapshot = {
+      status: 'ready',
+      view: {
+        writable: true,
+        hasDocument: true,
+        namespaces: [{
+          ns: 'bash', schema: {}, value: {}, applies: 'live', secrets: [], revision: 1,
+        }],
+      },
+      error: null,
+    }
+    notify()
 
-    expect(controller.inject().hooks.configurablePlugins.getSnapshot().namespaces).toEqual(['bash'])
+    expect(controller.inject().hooks.configurablePlugins.getSnapshot())
+      .toEqual({ loaded: true, namespaces: [] })
   })
 
   it('reports the Host answered even when it serves nothing this tab shows', async () => {
     const settings = settingsApi(['ui-theme'])
-    const controller = new ConfigurablePluginsTabController(settings.api, () => ledger('bash'))
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash'))
 
-    await controller.load()
+    await settings.mirror.ensure()
 
     expect(controller.inject().hooks.configurablePlugins.getSnapshot())
       .toEqual({ loaded: true, namespaces: [] })
@@ -715,11 +736,15 @@ describe('VisionCardController', () => {
     }
   }
 
-  function section(host: StubSettingsScope<VisionSettings>, rows: VisionSettings['backends'], attempts?: number): void {
+  function section(host: StubSettingsScope<VisionSettings>, rows: VisionSettings['backends'], attempts?: number, maxTokens?: number): void {
     host.publish({
       status: 'ready',
       writable: true,
-      value: { backends: rows, ...attempts === undefined ? {} : { attemptsPerBackend: attempts } } as VisionSettings,
+      value: {
+        backends: rows,
+        ...attempts === undefined ? {} : { attemptsPerBackend: attempts },
+        ...maxTokens === undefined ? {} : { maxTokens },
+      } as VisionSettings,
       base: { backends: rows },
       user: {},
     })
@@ -857,13 +882,13 @@ describe('VisionCardController', () => {
       effortEnabled: true,
       thinkingBudget: 2048,
       contextTokens: 200_000,
-      maxInputTokens: 180_000,
-    }])
+    }], undefined, 4096)
     await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
 
     const state = controller.inject().hooks.visionCard.getSnapshot()
     expect(state.rows[0]).toMatchObject({ protocol: 'anthropic', effortPreset: 'anthropic', effortEnabled: true })
-    expect(state.rowNumbers[0]).toEqual({ thinkingBudget: '2048', contextTokens: '200000', maxInputTokens: '180000' })
+    expect(state.rowNumbers[0]).toEqual({ thinkingBudget: '2048', contextTokens: '200000' })
+    expect(state.maxTokens).toBe('4096')
   })
 
   it('saves parsed numerics, omits blank drafts, and drops keys cleared to empty', async () => {
@@ -894,7 +919,7 @@ describe('VisionCardController', () => {
     })
   })
 
-  it('saves the context and input budgets when staged', async () => {
+  it('saves the context budget when staged', async () => {
     const host = stubSettingsScope<VisionSettings>()
     acceptWrites(host)
     const w = wire()
@@ -904,13 +929,12 @@ describe('VisionCardController', () => {
     const face = controller.inject()
 
     face.editRowNumber(0, 'contextTokens', '131072')
-    face.editRowNumber(0, 'maxInputTokens', '100000')
     face.save()
     await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
 
     const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
     const rows = backendsCall[1] as Record<string, unknown>[]
-    expect(rows[0]).toMatchObject({ contextTokens: 131072, maxInputTokens: 100000 })
+    expect(rows[0]).toMatchObject({ contextTokens: 131072 })
   })
 
   it('expands k/m suffixes on the staged budget drafts', async () => {
@@ -923,14 +947,16 @@ describe('VisionCardController', () => {
     const face = controller.inject()
 
     face.editRowNumber(0, 'contextTokens', '256k')
-    face.editRowNumber(0, 'maxInputTokens', '1.5m')
     face.editRowNumber(0, 'thinkingBudget', '2K')
+    face.editMaxTokens('1.5m')
     face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('backends', expect.anything()) })
+    // Await the chain write, not the backends one: the backends write lands
+    // first, and asserting right after it races the save's continuation.
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('maxTokens', 1_572_864) })
 
     const backendsCall = host.set.mock.calls.find(call => (call as unknown[])[0] === 'backends') as unknown as [string, unknown]
     const rows = backendsCall[1] as Record<string, unknown>[]
-    expect(rows[0]).toMatchObject({ contextTokens: 262_144, maxInputTokens: 1_572_864, thinkingBudget: 2048 })
+    expect(rows[0]).toMatchObject({ contextTokens: 262_144, thinkingBudget: 2048 })
   })
 
   it('fails the save on a non-numeric budget draft and keeps the section untouched', async () => {
@@ -942,7 +968,7 @@ describe('VisionCardController', () => {
     await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
     const face = controller.inject()
 
-    face.editRowNumber(0, 'maxInputTokens', 'not-a-number')
+    face.editMaxTokens('not-a-number')
     face.save()
     await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().failed).toBe(true) })
 
@@ -1243,6 +1269,20 @@ describe('VisionCardController', () => {
     await vi.waitFor(() => { expect(host.unset).toHaveBeenCalledWith('attemptsPerBackend') })
   })
 
+  it('unsets the output budget when its staged draft is blanked', async () => {
+    const host = stubSettingsScope<VisionSettings>()
+    acceptWrites(host)
+    const w = wire()
+    const controller = new VisionCardController(host.scope, w.api)
+    section(host, [{ id: 'qwen', baseURL: 'https://qwen.test/v1' }], undefined, 4096)
+    await vi.waitFor(() => { expect(controller.inject().hooks.visionCard.getSnapshot().rows).toHaveLength(1) })
+    const face = controller.inject()
+
+    face.editMaxTokens('')
+    face.save()
+    await vi.waitFor(() => { expect(host.unset).toHaveBeenCalledWith('maxTokens') })
+  })
+
   it('re-reads credentials only for a reference some row watches', async () => {
     const host = stubSettingsScope<VisionSettings>()
     const w = wire(true)
@@ -1260,5 +1300,368 @@ describe('VisionCardController', () => {
     controller.refreshCredential('VISION_QWEN_API_KEY')   // the derived default
     controller.refreshCredential('MY_VISION_KEY')          // the declared reference
     await vi.waitFor(() => { expect(w.describe.mock.calls.length).toBe(calls + 2) })
+  })
+})
+
+describe('RemoteCardController', () => {
+  /** Wire mocks for the remote domain: an answerable roster poll and the two verbs. */
+  function remoteWire(devices: RemoteTunnelState[] = []) {
+    const list = vi.fn(() => Promise.resolve({
+      rpcId: 'r-1' as never,
+      result: { ok: true as const, value: { devices } },
+    }))
+    const settle = () => Promise.resolve({ rpcId: 'r-2' as never, result: { ok: true as const, value: {} } })
+    const connect = vi.fn(settle)
+    const disconnect = vi.fn(settle)
+    const api = { remote: { list, connect, disconnect } }
+    return { api: api as unknown as Pick<IApiClient, 'remote'>, list, connect, disconnect }
+  }
+
+  function section(host: StubSettingsScope<RemoteSettings>, devices: RemoteSettings['devices']): void {
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { ...devices === undefined ? {} : { devices } },
+      base: {},
+      user: {},
+    })
+  }
+
+  function navigation() {
+    return { open: vi.fn(), assign: vi.fn() }
+  }
+
+  it('seeds the staged roster and port drafts from the stored section', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [
+      { id: 'work', label: 'Work', sshTarget: 'work', remotePort: 3080, localPort: 14000, autoConnect: true },
+      { id: 'hk' },
+    ])
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.rows.map(row => row.id)).toEqual(['work', 'hk'])
+    expect(state.rows[0]).toEqual({ id: 'work', label: 'Work', sshTarget: 'work', autoConnect: true })
+    expect(state.rowPorts[0]).toEqual({ remotePort: '3080', localPort: '14000' })
+    expect(state.rowPorts[1]).toEqual({ remotePort: '', localPort: '' })
+    expect(state.dirty).toBe(false)
+    expect(state.tunnels).toEqual([undefined, undefined])
+  })
+
+  it('stages edits and saves the whole roster, parsing ports and dropping blanked keys', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    acceptWrites(host)
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', label: 'Work', sshTarget: 'work', remotePort: 3080, localPort: 14000, autoConnect: true }])
+    const face = controller.inject()
+
+    face.editRow(0, 'label', '  ')
+    face.editRowPort(0, 'remotePort', '3090')
+    face.addRow()
+    face.editRow(1, 'sshTarget', 'hk')
+    expect(controller.inject().hooks.remoteCard.getSnapshot().dirty).toBe(true)
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalled() })
+
+    const [field, value] = host.set.mock.calls[0] as unknown as [string, unknown]
+    expect(field).toBe('devices')
+    expect(value).toEqual([
+      { id: 'work', sshTarget: 'work', autoConnect: true, remotePort: 3090, localPort: 14000 },
+      { id: 'device-2', sshTarget: 'hk' },
+    ])
+    await vi.waitFor(() => {
+      const state = controller.inject().hooks.remoteCard.getSnapshot()
+      expect(state.dirty).toBe(false)
+      expect(state.rows).toHaveLength(2)
+      expect(state.rowPorts[0]?.remotePort).toBe('3090')
+    })
+  })
+
+  it('mints an add-row id past every existing one', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'device-2' }])
+    const face = controller.inject()
+
+    face.addRow()
+    expect(controller.inject().hooks.remoteCard.getSnapshot().rows.map(row => row.id)).toEqual(['device-2', 'device-3'])
+  })
+
+  it('fails the save without a write when a staged port is out of range', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.editRowPort(0, 'localPort', '70000')
+    face.save()
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.remoteCard.getSnapshot().failed).toBe(true)
+    })
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('keeps the failure banner up after a rejected write reseeds the drafts', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    host.set.mockRejectedValue(new Error('the deployment refused the write'))
+    const face = controller.inject()
+
+    face.editRow(0, 'label', 'Work')
+    face.save()
+    await vi.waitFor(() => {
+      const state = controller.inject().hooks.remoteCard.getSnapshot()
+      expect(state.failed).toBe(true)
+      expect(state.dirty).toBe(false)
+      expect(state.rows[0]?.label).toBeUndefined()
+    })
+  })
+
+  it('discards staged edits back to the stored section', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.editRow(0, 'label', 'Work')
+    face.addRow()
+    face.discard()
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.dirty).toBe(false)
+    expect(state.rows).toEqual([{ id: 'work', sshTarget: 'work' }])
+  })
+
+  it('maps the polled tunnel state onto rows by id, not position', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire([
+      { id: 'a', tunnel: 'ready', url: 'http://127.0.0.1:13389/' },
+      { id: 'b', tunnel: 'failed', detail: 'permission denied (publickey)' },
+    ])
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'b', sshTarget: 'b' }, { id: 'a', sshTarget: 'a' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => {
+      const state = controller.inject().hooks.remoteCard.getSnapshot()
+      expect(state.tunnels[0]?.tunnel).toBe('failed')
+      expect(state.tunnels[1]?.tunnel).toBe('ready')
+    })
+    face.setPolling(false)
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.tunnels[0]?.detail).toBe('permission denied (publickey)')
+    expect(state.tunnels[1]?.url).toBe('http://127.0.0.1:13389/')
+  })
+
+  it('runs the verbs against the row id and refreshes, swallowing a rejection', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire([{ id: 'work', tunnel: 'disconnected' }])
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.connect(0)
+    await vi.waitFor(() => { expect(w.connect).toHaveBeenCalledWith({ id: 'work' }) })
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalled() })
+
+    w.disconnect.mockRejectedValueOnce(new Error('host unreachable'))
+    face.disconnect(0)
+    await vi.waitFor(() => { expect(w.disconnect).toHaveBeenCalledWith({ id: 'work' }) })
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalledTimes(2) })
+  })
+
+  it('navigates only for a row whose poll published a url', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const nav = navigation()
+    const w = remoteWire([
+      { id: 'work', tunnel: 'ready', url: 'http://127.0.0.1:13389/' },
+      { id: 'hk', tunnel: 'disconnected' },
+    ])
+    const controller = new RemoteCardController(host.scope, w.api, nav)
+    section(host, [{ id: 'work', sshTarget: 'work' }, { id: 'hk', sshTarget: 'hk' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => {
+      expect(controller.inject().hooks.remoteCard.getSnapshot().tunnels[0]?.url).toBe('http://127.0.0.1:13389/')
+    })
+    face.setPolling(false)
+
+    face.openExternal(0)
+    face.openHere(0)
+    expect(nav.open).toHaveBeenCalledWith('http://127.0.0.1:13389/')
+    expect(nav.assign).toHaveBeenCalledWith('http://127.0.0.1:13389/')
+
+    face.openExternal(1)
+    face.openHere(1)
+    expect(nav.open).toHaveBeenCalledTimes(1)
+    expect(nav.assign).toHaveBeenCalledTimes(1)
+  })
+
+  it('polls on an interval only while active', async () => {
+    vi.useFakeTimers()
+    try {
+      const host = stubSettingsScope<RemoteSettings>()
+      const w = remoteWire([])
+      const controller = new RemoteCardController(host.scope, w.api, navigation())
+      section(host, [{ id: 'work', sshTarget: 'work' }])
+      const face = controller.inject()
+
+      face.setPolling(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(w.list).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS)
+      expect(w.list).toHaveBeenCalledTimes(2)
+
+      // Repeating the same request is a no-op; stopping ends the interval.
+      face.setPolling(true)
+      face.setPolling(false)
+      await vi.advanceTimersByTimeAsync(REMOTE_POLL_MS * 3)
+      expect(w.list).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores row actions aimed outside the roster', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const nav = navigation()
+    const controller = new RemoteCardController(host.scope, w.api, nav)
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.editRow(9, 'label', 'nope')
+    face.editRowPort(9, 'localPort', '14000')
+    face.removeRow(9)
+    face.connect(9)
+    face.disconnect(9)
+    face.openExternal(9)
+    face.openHere(9)
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.dirty).toBe(false)
+    expect(state.rows).toHaveLength(1)
+    expect(w.connect).not.toHaveBeenCalled()
+    expect(w.disconnect).not.toHaveBeenCalled()
+    expect(nav.open).not.toHaveBeenCalled()
+    expect(nav.assign).not.toHaveBeenCalled()
+  })
+
+  it('leaves the staged roster alone when a poll fails', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    w.list.mockRejectedValue(new Error('offline'))
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalled() })
+    face.setPolling(false)
+
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.tunnels).toEqual([undefined])
+  })
+
+  it('removes a staged row', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work' }, { id: 'hk' }])
+    const face = controller.inject()
+
+    face.removeRow(0)
+    const state = controller.inject().hooks.remoteCard.getSnapshot()
+    expect(state.dirty).toBe(true)
+    expect(state.rows.map(row => row.id)).toEqual(['hk'])
+    expect(state.rowPorts).toHaveLength(1)
+  })
+
+  it('deletes a blanked sshTarget and stages a boolean verbatim', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work', autoConnect: true }])
+    const face = controller.inject()
+
+    face.editRow(0, 'sshTarget', '   ')
+    face.editRow(0, 'autoConnect', false)
+    expect(controller.inject().hooks.remoteCard.getSnapshot().rows[0]).toEqual({ id: 'work', autoConnect: false })
+  })
+
+  it('folds a poll requested mid-flight into one follow-up', async () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    w.list.mockImplementationOnce(() => gate.then(() => ({
+      rpcId: 'r-1' as never,
+      result: { ok: true as const, value: { devices: [] } },
+    })))
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    section(host, [{ id: 'work', sshTarget: 'work' }])
+    const face = controller.inject()
+
+    face.setPolling(true)
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalledTimes(1) })
+    // The verb's refresh arrives while the first poll is still on the wire.
+    face.connect(0)
+    await vi.waitFor(() => { expect(w.connect).toHaveBeenCalled() })
+    release()
+    await vi.waitFor(() => { expect(w.list).toHaveBeenCalledTimes(2) })
+    face.setPolling(false)
+  })
+
+  it('refuses to save a read-only document', () => {
+    const host = stubSettingsScope<RemoteSettings>()
+    const w = remoteWire()
+    const controller = new RemoteCardController(host.scope, w.api, navigation())
+    host.publish({
+      status: 'ready',
+      writable: false,
+      value: { devices: [{ id: 'work', sshTarget: 'work' }] },
+      base: {},
+      user: {},
+    })
+    const face = controller.inject()
+
+    face.editRow(0, 'label', 'Work')
+    face.save()
+    expect(host.set).not.toHaveBeenCalled()
+  })
+
+  it('defaults navigation to the window surfaces', async () => {
+    const open = vi.fn()
+    const assign = vi.fn()
+    vi.stubGlobal('window', { open, location: { assign } })
+    try {
+      const host = stubSettingsScope<RemoteSettings>()
+      const w = remoteWire([{ id: 'work', tunnel: 'ready', url: 'http://127.0.0.1:13389/' }])
+      const controller = new RemoteCardController(host.scope, w.api)
+      section(host, [{ id: 'work', sshTarget: 'work' }])
+      const face = controller.inject()
+
+      face.setPolling(true)
+      await vi.waitFor(() => {
+        expect(controller.inject().hooks.remoteCard.getSnapshot().tunnels[0]?.url).toBe('http://127.0.0.1:13389/')
+      })
+      face.setPolling(false)
+
+      face.openExternal(0)
+      face.openHere(0)
+      expect(open).toHaveBeenCalledWith('http://127.0.0.1:13389/', '_blank', 'noopener')
+      expect(assign).toHaveBeenCalledWith('http://127.0.0.1:13389/')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

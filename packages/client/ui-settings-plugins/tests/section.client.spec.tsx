@@ -7,7 +7,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { AgentLoopCard } from '../src/client/AgentLoopCard.tsx'
 import type { AgentLoopCardProps } from '../src/client/AgentLoopCard.tsx'
@@ -19,6 +19,8 @@ import { PluginsSettingsSection } from '../src/client/PluginsSettingsSection.tsx
 import type { PluginsSettingsSectionProps, PluginsSettingsTabEntry } from '../src/client/PluginsSettingsSection.tsx'
 import { VisionCard } from '../src/client/VisionCard.tsx'
 import type { VisionCardProps } from '../src/client/VisionCard.tsx'
+import { RemoteCard } from '../src/client/RemoteCard.tsx'
+import type { RemoteCardProps } from '../src/client/RemoteCard.tsx'
 import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
 import type { WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
@@ -26,6 +28,7 @@ import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
 import type { VisionCardState } from '../src/client/vision-card-controller.ts'
+import type { RemoteCardState } from '../src/client/remote-card-controller.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
@@ -431,6 +434,7 @@ function visionFace() {
     removeRow: vi.fn(),
     addRow: vi.fn(),
     editAttempts: vi.fn(),
+    editMaxTokens: vi.fn(),
     editRowKey: vi.fn(),
     probe: vi.fn(),
     save: vi.fn(),
@@ -453,6 +457,7 @@ describe('VisionCard', () => {
       rowConfigured: rows.map(row => (row.model ?? '').trim() !== ''),
       canAdd: true,
       attempts: '',
+      maxTokens: '',
       probes: rows.map(() => ({ probing: false, models: [] })),
       credentials: rows.map(row => ({ ref: `VISION_${row.id.toUpperCase()}_API_KEY`, configured: false })),
       ...state,
@@ -467,7 +472,7 @@ describe('VisionCard', () => {
   it('stages protocol and openai effort-level edits through the face', () => {
     const face = renderVision(
       [{ id: 'gpt', baseURL: 'https://gpt.test/v1', effortPreset: 'openai' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     fireEvent.change(screen.getByLabelText(en.visionProtocol), { target: { value: 'openai-responses' } })
@@ -484,7 +489,7 @@ describe('VisionCard', () => {
   it('stages the staged effort level the openai preset carries', () => {
     renderVision(
       [{ id: 'gpt', baseURL: 'https://gpt.test/v1', effortPreset: 'openai', effortLevel: 'low' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     expect(screen.getByLabelText(en.visionEffortLevel)).toHaveProperty('value', 'low')
@@ -498,7 +503,7 @@ describe('VisionCard', () => {
         { id: 'emptyref', baseURL: 'https://c.test/v1', apiKeyEnv: '' },
       ],
       [],
-      { probes: [], credentials: [], rowKeys: [] },
+      { probes: [], credentials: [], rowKeys: [], rowConfigured: [] },
     )
 
     // The key label names the declared reference, or the derived default.
@@ -514,8 +519,8 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'down', baseURL: 'https://down.test/v1' }, { id: 'busy', baseURL: 'https://busy.test/v1' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
       {
         probes: [
@@ -533,7 +538,7 @@ describe('VisionCard', () => {
   it('offers the advertised models once a probe lists more than one', () => {
     renderVision(
       [{ id: 'multi', baseURL: 'https://multi.test/v1' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
       { probes: [{ probing: false, models: [{ id: 'm1' }, { id: 'm2' }] }] },
     )
 
@@ -545,7 +550,7 @@ describe('VisionCard', () => {
   it('shows the off/on toggle alone for the mimo preset', () => {
     const face = renderVision(
       [{ id: 'mimo', baseURL: 'https://mimo.test', effortPreset: 'mimo' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     expect(screen.queryByLabelText(en.visionEffortLevel)).toBeNull()
@@ -555,28 +560,26 @@ describe('VisionCard', () => {
     expect(face.editRow).toHaveBeenCalledWith(0, 'effortEnabled', true)
   })
 
-  it('pairs the toggle with a budget for qwen-local, and stages context and input limits', () => {
+  it('pairs the toggle with a budget for qwen-local, and stages the context window', () => {
     const face = renderVision(
       [{ id: 'local', baseURL: 'http://localhost:8000/v1', effortPreset: 'qwen-local' }],
-      [{ thinkingBudget: '512', contextTokens: '32768', maxInputTokens: '' }],
+      [{ thinkingBudget: '512', contextTokens: '32768' }],
     )
 
     expect(screen.getByLabelText(en.visionThinkingBudget)).toHaveProperty('value', '512')
     fireEvent.change(screen.getByLabelText(en.visionThinkingBudget), { target: { value: '1024' } })
     fireEvent.change(screen.getByLabelText(en.visionContextTokens), { target: { value: '131072' } })
-    fireEvent.change(screen.getByLabelText(en.visionMaxInputTokens), { target: { value: '100000' } })
 
     expect(face.editRowNumber.mock.calls).toEqual([
       [0, 'thinkingBudget', '1024'],
       [0, 'contextTokens', '131072'],
-      [0, 'maxInputTokens', '100000'],
     ])
   })
 
   it('pairs the toggle with a budget for the anthropic preset', () => {
     renderVision(
       [{ id: 'claude', baseURL: 'https://anthropic.test', effortPreset: 'anthropic', effortEnabled: true }],
-      [{ thinkingBudget: '2048', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '2048', contextTokens: '' }],
     )
 
     expect(screen.getByLabelText(en.visionEffortEnabled)).toHaveProperty('checked', true)
@@ -586,7 +589,7 @@ describe('VisionCard', () => {
   it('renders no effort control without a preset', () => {
     renderVision(
       [{ id: 'plain', baseURL: 'https://qwen.test/v1' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
     )
 
     expect(screen.getByLabelText(en.visionEffortPreset)).toHaveProperty('value', '')
@@ -602,9 +605,9 @@ describe('VisionCard', () => {
         { id: 'gpt', baseURL: 'https://gpt.test/v1', protocol: 'openai-responses' },
       ],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
       { attempts: '3' },
     )
@@ -625,9 +628,9 @@ describe('VisionCard', () => {
     const face = renderVision(
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
     const handles = screen.getAllByRole('button', { name: en.visionDragHandle })
@@ -658,7 +661,7 @@ describe('VisionCard', () => {
   it('disables the drag handle when the card is read-only', () => {
     renderVision(
       [{ id: 'a' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
       { writable: false },
     )
     const handle = screen.getByRole('button', { name: en.visionDragHandle })
@@ -673,8 +676,8 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'saved', model: 'm1' }, { id: 'fresh' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
     // The stored, filled row renders as its head only; the blank row stays open.
@@ -697,8 +700,8 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'a' }, { id: 'b' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
     expect(screen.getAllByRole('textbox', { name: en.visionBaseUrl })).toHaveLength(2)
@@ -714,9 +717,9 @@ describe('VisionCard', () => {
     renderVision(
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
       [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
     )
 
@@ -737,7 +740,7 @@ describe('VisionCard', () => {
   it('echoes the staged key as dots and marks it staged until the save lands', () => {
     renderVision(
       [{ id: 'a' }],
-      [{ thinkingBudget: '', contextTokens: '', maxInputTokens: '' }],
+      [{ thinkingBudget: '', contextTokens: '' }],
       { rowKeys: ['sk-staged'] },
     )
 
@@ -759,11 +762,12 @@ describe('VisionCard chain editing', () => {
       dirty: true,
       rows,
       rowNumbers: [
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
-        { thinkingBudget: '', contextTokens: '', maxInputTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
+        { thinkingBudget: '', contextTokens: '' },
       ],
       canAdd: true,
       attempts: '2',
+      maxTokens: '',
       rowKeys: ['', ''],
       // Both rows forced expanded: this test drives body controls positionally;
       // the collapse default itself is covered by its own test.
@@ -813,11 +817,172 @@ describe('VisionCard chain editing', () => {
     // Chain-wide controls and the footer.
     fireEvent.click(screen.getByRole('button', { name: en.visionAddBackend }))
     fireEvent.change(screen.getByLabelText(en.visionAttempts), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText(en.visionMaxTokens), { target: { value: '4k' } })
     fireEvent.click(screen.getByRole('button', { name: en.discard }))
     fireEvent.click(screen.getByRole('button', { name: en.save }))
     expect(face.addRow).toHaveBeenCalledOnce()
     expect(face.editAttempts).toHaveBeenCalledWith('3')
+    expect(face.editMaxTokens).toHaveBeenCalledWith('4k')
     expect(face.discard).toHaveBeenCalledOnce()
     expect(face.save).toHaveBeenCalledOnce()
+  })
+})
+
+function remoteFace() {
+  return {
+    editRow: vi.fn(),
+    editRowPort: vi.fn(),
+    removeRow: vi.fn(),
+    addRow: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    openExternal: vi.fn(),
+    openHere: vi.fn(),
+    save: vi.fn(),
+    discard: vi.fn(),
+    setPolling: vi.fn(),
+  }
+}
+
+describe('RemoteCard', () => {
+  function renderRemote(
+    rows: RemoteCardState['rows'],
+    tunnels: RemoteCardState['tunnels'],
+    state: Partial<RemoteCardState> = {},
+  ) {
+    const store = createSnapshotStore<RemoteCardState>({
+      ...settled,
+      invalid: false,
+      rows,
+      rowPorts: rows.map(() => ({ remotePort: '', localPort: '' })),
+      rowConfigured: rows.map(() => false),
+      tunnels,
+      ...state,
+    })
+    const face = remoteFace()
+    const props = { ...face, t, useRemoteCard: bindSnapshotSelector(store) } as unknown as RemoteCardProps
+    render(<RemoteCard {...props} />)
+    fireEvent.click(screen.getByText(en.remoteTitle))
+    return face
+  }
+
+  it('starts the tunnel poll on mount and stops it on unmount', () => {
+    const face = renderRemote([], [])
+    expect(face.setPolling).toHaveBeenCalledWith(true)
+    cleanup()
+    expect(face.setPolling).toHaveBeenCalledWith(false)
+  })
+
+  it('shows the empty line when the roster is empty', () => {
+    renderRemote([], [])
+    expect(screen.getByText(en.remoteEmpty)).toBeTruthy()
+  })
+
+  it('renders blank port drafts when the poll state has none for a row', () => {
+    renderRemote([{ id: 'work' }], [undefined], { rowPorts: [] })
+
+    expect(screen.getByLabelText(en.remoteRemotePort)).toHaveProperty('value', '')
+    expect(screen.getByLabelText(en.remoteLocalPort)).toHaveProperty('value', '')
+  })
+
+  it('renders each row with its phase pill, detail line, and ready actions', () => {
+    const face = renderRemote(
+      [{ id: 'work', label: 'Work', sshTarget: 'work' }, { id: 'hk' }, { id: 'nas' }, { id: 'vm' }, { id: 'pi' }],
+      [
+        { id: 'work', tunnel: 'ready', url: 'http://127.0.0.1:13389/' },
+        { id: 'hk', tunnel: 'failed', detail: 'permission denied (publickey)' },
+        { id: 'nas', tunnel: 'connecting' },
+        undefined,
+        { id: 'pi', tunnel: 'disconnected' },
+      ],
+    )
+
+    // A labeled row titles on the label with the id alongside; a bare row titles on the id.
+    expect(screen.getByText('Work')).toBeTruthy()
+    expect(screen.getByText('· work')).toBeTruthy()
+    expect(screen.getByText('hk')).toBeTruthy()
+
+    expect(screen.getByText(en.remoteStateReady)).toBeTruthy()
+    expect(screen.getByText(en.remoteStateConnecting)).toBeTruthy()
+    expect(screen.getByText(en.remoteStateUnknown)).toBeTruthy()
+    expect(screen.getByText(en.remoteStateDisconnected)).toBeTruthy()
+    expect(screen.getByText('permission denied (publickey)')).toBeTruthy()
+
+    // Only the ready row offers its tunneled address, both ways out.
+    const link = screen.getByRole('link', { name: en.remoteOpenExternal })
+    expect(link.getAttribute('href')).toBe('http://127.0.0.1:13389/')
+    expect(link.getAttribute('target')).toBe('_blank')
+    fireEvent.click(screen.getByRole('button', { name: en.remoteOpenHere }))
+    expect(face.openHere).toHaveBeenCalledWith(0)
+
+    // The verb follows the phase: the ready and connecting rows offer
+    // Disconnect, the rest offer Connect.
+    fireEvent.click(screen.getAllByRole('button', { name: en.remoteDisconnect })[0]!)
+    expect(face.disconnect).toHaveBeenCalledWith(0)
+    fireEvent.click(screen.getAllByRole('button', { name: en.remoteConnect })[0]!)
+    expect(face.connect).toHaveBeenCalledWith(1)
+  })
+
+  it('stages field edits through the face', () => {
+    const face = renderRemote(
+      [{ id: 'work', label: 'Work', sshTarget: 'work', autoConnect: false }],
+      [undefined],
+    )
+
+    fireEvent.change(screen.getByLabelText(en.remoteId), { target: { value: 'work-2' } })
+    fireEvent.change(screen.getByLabelText(en.remoteLabel), { target: { value: 'Office' } })
+    fireEvent.change(screen.getByLabelText(en.remoteSshTarget), { target: { value: 'office' } })
+    fireEvent.change(screen.getByLabelText(en.remoteRemotePort), { target: { value: '3090' } })
+    fireEvent.change(screen.getByLabelText(en.remoteLocalPort), { target: { value: '14000' } })
+    fireEvent.click(screen.getByLabelText(en.remoteAutoConnect))
+
+    expect(face.editRow.mock.calls).toEqual([
+      [0, 'id', 'work-2'],
+      [0, 'label', 'Office'],
+      [0, 'sshTarget', 'office'],
+      [0, 'autoConnect', true],
+    ])
+    expect(face.editRowPort.mock.calls).toEqual([
+      [0, 'remotePort', '3090'],
+      [0, 'localPort', '14000'],
+    ])
+  })
+
+  it('adds and removes rows through the face', () => {
+    const face = renderRemote([{ id: 'a' }, { id: 'b' }], [undefined, undefined])
+
+    fireEvent.click(screen.getByRole('button', { name: en.remoteAddDevice }))
+    expect(face.addRow).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getAllByRole('button', { name: en.visionRemove })[1]!)
+    expect(face.removeRow).toHaveBeenCalledWith(1)
+  })
+
+  it('routes the footer save and discard through the face', () => {
+    const face = renderRemote([{ id: 'work' }], [undefined], { dirty: true })
+
+    fireEvent.click(screen.getByRole('button', { name: en.save }))
+    fireEvent.click(screen.getByRole('button', { name: en.discard }))
+    expect(face.save).toHaveBeenCalledOnce()
+    expect(face.discard).toHaveBeenCalledOnce()
+  })
+
+  it('collapses configured rows by default and toggles individual or all rows', () => {
+    renderRemote(
+      [{ id: 'work', sshTarget: 'work' }, { id: 'new-device' }],
+      [undefined, undefined],
+      { rowConfigured: [true, false] },
+    )
+
+    // Configured row 0 starts collapsed, unconfigured row 1 starts expanded
+    expect(screen.queryAllByRole('textbox', { name: en.remoteSshTarget })).toHaveLength(1)
+
+    // Clicking the row 0 toggle button expands it
+    const toggles = screen.getAllByRole('button', { name: en.visionExpand })
+    fireEvent.click(toggles[0]!)
+    expect(screen.getAllByRole('textbox', { name: en.remoteSshTarget })).toHaveLength(2)
+
+    // Clicking collapse all collapses both
+    fireEvent.click(screen.getByRole('button', { name: en.visionCollapseAll }))
+    expect(screen.queryAllByRole('textbox', { name: en.remoteSshTarget })).toHaveLength(0)
   })
 })

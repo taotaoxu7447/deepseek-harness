@@ -29,6 +29,9 @@ function scriptedApi(overrides: {
   credentials?: Partial<ApiProxy['credentials']>
   llm?: Partial<ApiProxy['llm']>
   vision?: Partial<ApiProxy['vision']>
+  remote?: Partial<ApiProxy['remote']>
+  v4Monitor?: Partial<ApiProxy['v4Monitor']>
+  balance?: Partial<ApiProxy['balance']>
   respond?: ApiProxy['respond']
 } = {}): ApiProxy {
   async function *empty<F>(): AsyncGenerator<RpcRequest<F>> { /* no frames */ }
@@ -73,7 +76,7 @@ function scriptedApi(overrides: {
     },
     host: {
       describe: r => ok(r, {
-        version: '0-test', cwd: '/t', attachedSessions: 0, canOpenPath: true,
+        version: '0-test', cwd: '/t', attachedSessions: 0, home: '/h', canOpenPath: true,
       }),
       pickDirectory: r => ok(r, { path: null }),
       listDirectory: r => ok(r, { path: '/t', home: '/t', crumbs: [], entries: [], truncated: false }),
@@ -132,6 +135,20 @@ function scriptedApi(overrides: {
     vision: {
       discoverModels: err,
       ...overrides.vision,
+    },
+    remote: {
+      list: r => ok(r, { devices: [] }),
+      connect: err,
+      disconnect: err,
+      ...overrides.remote,
+    },
+    v4Monitor: {
+      state: r => ok(r, { state: null }),
+      ...overrides.v4Monitor,
+    },
+    balance: {
+      get: r => ok(r, { balance: null }),
+      ...overrides.balance,
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
     respond: overrides.respond ?? (() => Promise.resolve({ accepted: false as const, reason: 'not-pending' as const })),

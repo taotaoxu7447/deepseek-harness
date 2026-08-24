@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-[`scripts/linux-app`](../../../../scripts/linux-app/README.md) 是覆盖 `http://127.0.0.1:3080/` 的 GTK 4 + libadwaita + WebKitGTK 6 壳层。`scripts/linux-app/build.sh` 会安装用户桌面项 `com.deepseek.harness.desktop`、hicolor 图标、`~/.local/bin/deepseek-harness`、`~/.local/bin/dsh` 和 `~/bin/dsh-serve`。application id 为 `com.deepseek.harness`，避免桌面文件名变成 `*.desktop.desktop`；macOS bundle id 仍为 `com.deepseek.harness.desktop`。终端 `dsh` 包装器会 exec 本检出目录的 CLI（`apps/cli/lib/bin.js`，或通过 tsx 运行 TypeScript 入口），且不改变调用时的目录，因此在任意文件夹运行 `dsh web` 和 `dsh --profile headless` 都会使用本 fork 的 vision 链和自定义模型 effort UI，并以该文件夹为默认 workspace。
+[`scripts/linux-app`](../../../../scripts/linux-app/README.zh.md) 是覆盖 `http://127.0.0.1:3080/` 的 GTK 4 + libadwaita + WebKitGTK 6 壳层。`scripts/linux-app/build.sh` 会安装用户桌面项 `com.deepseek.harness.desktop`、hicolor 图标、`~/.local/bin/deepseek-harness`、`~/.local/bin/dsh` 和 `~/bin/dsh-serve`。application id 为 `com.deepseek.harness`，避免桌面文件名变成 `*.desktop.desktop`；macOS bundle id 仍为 `com.deepseek.harness.desktop`。终端 `dsh` 包装器会 exec 本检出目录的 CLI（`apps/cli/lib/bin.js`，或通过 tsx 运行 TypeScript 入口），且不改变调用时的目录，因此在任意文件夹运行 `dsh web` 和 `dsh --profile headless` 都会使用本 fork 的 vision 链和自定义模型 effort UI，并以该文件夹为默认 workspace。
 
 壳层先对环回 URL 做健康检查，未就绪时在新会话中运行 `dsh-serve`。`dsh-serve` 在 `~/.dsh/serve.lock` 上取排他锁，依次启动 `DSH_SERVE_CMD`、否则在已构建的检出目录（`DSH_CHECKOUT` 或已安装的 `checkout.path`）中运行 `pnpm dsh web`、否则 `dsh web`、否则 `npx --yes @deepseek-ai/dsh web`，等到环回 URL 有响应，并且不把服务器挂到 GTK 进程组。检出目录是本 fork 的 vision 链和自定义模型 reasoning-effort UI 所必需的，已发布的 npm 包不包含这些功能。关闭窗口或 Ctrl+Q 只退出壳层。Ctrl+R / F5 重新加载。无法渲染的 MIME 类型以及 `Content-Disposition: attachment` 响应会按与 macOS 壳层相同的去重文件名写入 `~/Downloads`，并通过 `org.freedesktop.FileManager1` 显示该文件。网站数据保存在 `~/.local/share/deepseek-harness/webkit`。GNOME 启动会把 `~/bin` 和 `~/.local/bin` 加到 `PATH` 前面，因为桌面 `PATH` 里没有这些目录。进程会设置 `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS`，从而不启动 WebKitGTK 的 bubblewrap：webview 只加载环回 UI，且在无法使用非特权 user namespace 时该沙箱会失败。
 
@@ -28,7 +28,7 @@ Status: implemented
 
 ## 后果
 
-Ubuntu 24.04 的 GNOME 可以安装并启动一个原生窗口，覆盖浏览器已经使用的同一环回 Web UI。后端寿命长于窗口，与 macOS 的寿命规则一致。该壳层需要 [Linux 桌面壳层 README](../../../../scripts/linux-app/README.md) 中列出的 GI 绑定；无界面主机仍可运行 `python3 -m unittest scripts/linux-app/test_helpers.py`，因为这些测试不导入 GTK。Linux application id 不是 macOS bundle id。`dsh-serve` 用 `setsid` 守护化，因此壳层崩溃或退出不会停止进行中的会话。关闭 WebKitGTK 沙箱意味着渲染进程一旦被攻破会共享用户权限；这被接受，因为加载的源是本地 Web UI，而不是任意网站。
+Ubuntu 24.04 的 GNOME 可以安装并启动一个原生窗口，覆盖浏览器已经使用的同一环回 Web UI。后端寿命长于窗口，与 macOS 的寿命规则一致。该壳层需要 [Linux 桌面壳层 README](../../../../scripts/linux-app/README.zh.md) 中列出的 GI 绑定；无界面主机仍可运行 `python3 -m unittest scripts/linux-app/test_helpers.py`，因为这些测试不导入 GTK。Linux application id 不是 macOS bundle id。`dsh-serve` 用 `setsid` 守护化，因此壳层崩溃或退出不会停止进行中的会话。关闭 WebKitGTK 沙箱意味着渲染进程一旦被攻破会共享用户权限；这被接受，因为加载的源是本地 Web UI，而不是任意网站。
 
 ## 测试
 
