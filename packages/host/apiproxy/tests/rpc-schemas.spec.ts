@@ -37,6 +37,10 @@ import { approvalRequestIdSchema, approvalResponsePayloadSchema } from '../src/a
 import { askUserQuestionAnswerSchema, questionResponsePayloadSchema } from '../src/api/questions.schema.ts'
 import { goalEditRequestSchema } from '../src/api/goals.schema.ts'
 import { subagentPromptRequestSchema } from '../src/api/subagents.schema.ts'
+import {
+  balanceGetRequestSchema, balanceGetValueSchema, balancePeriodSchema,
+  balanceViewSchema, consumptionDataSchema, consumptionItemSchema,
+} from '../src/api/balance.schema.ts'
 
 describe('RpcId', () => {
   it('brands a raw string at zero runtime cost', () => {
@@ -569,5 +573,48 @@ describe('agent-preset schemas', () => {
       .toEqual({ opened: false, path: '/presets/mine' })
     // A closed reply must carry the path the surface shows instead.
     expect(() => agentPresetOpenDocumentValueSchema.parse({ opened: false })).toThrow()
+  })
+})
+
+describe('balance domain schemas', () => {
+  it('validates balance period enum', () => {
+    expect(balancePeriodSchema.parse('peak')).toBe('peak')
+    expect(balancePeriodSchema.parse('valley')).toBe('valley')
+    expect(() => balancePeriodSchema.parse('other')).toThrow()
+  })
+
+  it('validates consumption item and consumption data', () => {
+    const item = { key: '2026-08-24', label: '8/24', amount: 12.5 }
+    expect(consumptionItemSchema.parse(item)).toEqual(item)
+    expect(() => consumptionItemSchema.parse({ key: '2026-08-24', label: '8/24', amount: '12.5' })).toThrow()
+
+    const data = {
+      daily: [item],
+      monthly: [{ key: '2026-08', label: '8月', amount: 150 }],
+    }
+    expect(consumptionDataSchema.parse(data)).toEqual(data)
+    expect(() => consumptionDataSchema.parse({ daily: [], monthly: 'invalid' })).toThrow()
+  })
+
+  it('validates balance view schema and request/value envelopes', () => {
+    const view = {
+      currency: 'CNY',
+      total: '88.50',
+      available: true,
+      period: 'peak' as const,
+      periodLabel: '梁文峰',
+      consumption: {
+        daily: [{ key: '2026-08-24', label: '8/24', amount: 5.2 }],
+        monthly: [{ key: '2026-08', label: '8月', amount: 42.0 }],
+      },
+    }
+    expect(balanceViewSchema.parse(view)).toEqual(view)
+    expect(() => balanceViewSchema.parse({ ...view, period: 'invalid' })).toThrow()
+    expect(() => balanceViewSchema.parse({ currency: 'CNY', total: '88.50', available: true })).toThrow()
+
+    expect(balanceGetRequestSchema.parse({})).toEqual({})
+    expect(balanceGetRequestSchema.parse({ force: true })).toEqual({ force: true })
+    expect(balanceGetValueSchema.parse({ balance: view })).toEqual({ balance: view })
+    expect(balanceGetValueSchema.parse({ balance: null })).toEqual({ balance: null })
   })
 })

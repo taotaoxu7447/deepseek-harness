@@ -71,7 +71,7 @@ export type { CredentialsApi, CredentialView } from './credentials.ts'
 export type { ConfigurableProviderView, DiscoveredModelView, LlmApi } from './llm.ts'
 export type { RemoteApi, RemoteDeviceView, RemoteTunnelPhase } from './remote.ts'
 export type { V4MonitorApi, V4MonitorStateView, V4SlotView, V4HistoryItemView, V4EngineView, V4SlotStateView, V4SlotParamsView } from './v4-monitor.ts'
-export type { BalanceApi, BalanceView } from './balance.ts'
+export type { BalanceApi, BalancePeriod, BalanceView, ConsumptionData, ConsumptionItem } from './balance.ts'
 export type { DownloadsApi } from './downloads.ts'
 export type { ApprovalResponsePayload } from './approvals.ts'
 
