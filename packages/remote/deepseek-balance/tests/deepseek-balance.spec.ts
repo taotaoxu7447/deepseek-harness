@@ -242,9 +242,9 @@ describe('DeepSeekBalanceService', () => {
     const b2 = await ctx.deepseekBalance.fetchBalance(true)
     expect(b2?.total).toBe('95.50')
     expect(b2?.consumption.daily.length).toBe(1)
-    expect(b2?.consumption.daily[0].amount).toBe(4.5)
+    expect(b2?.consumption.daily[0]?.amount).toBe(4.5)
     expect(b2?.consumption.monthly.length).toBe(1)
-    expect(b2?.consumption.monthly[0].amount).toBe(4.5)
+    expect(b2?.consumption.monthly[0]?.amount).toBe(4.5)
 
     // 3rd fetch: top-up to 200.00 (delta <= 0, no consumption added)
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
@@ -259,9 +259,9 @@ describe('DeepSeekBalanceService', () => {
     const b3 = await ctx.deepseekBalance.fetchBalance(true)
     expect(b3?.total).toBe('200.00')
     expect(b3?.consumption.daily.length).toBe(1)
-    expect(b3?.consumption.daily[0].amount).toBe(4.5)
+    expect(b3?.consumption.daily[0]?.amount).toBe(4.5)
     expect(b3?.consumption.monthly.length).toBe(1)
-    expect(b3?.consumption.monthly[0].amount).toBe(4.5)
+    expect(b3?.consumption.monthly[0]?.amount).toBe(4.5)
 
     // 4th fetch: balance 190.00 (consumption delta 10.00, total = 14.50)
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
@@ -276,9 +276,9 @@ describe('DeepSeekBalanceService', () => {
     const b4 = await ctx.deepseekBalance.fetchBalance(true)
     expect(b4?.total).toBe('190.00')
     expect(b4?.consumption.daily.length).toBe(1)
-    expect(b4?.consumption.daily[0].amount).toBe(14.5)
+    expect(b4?.consumption.daily[0]?.amount).toBe(14.5)
     expect(b4?.consumption.monthly.length).toBe(1)
-    expect(b4?.consumption.monthly[0].amount).toBe(14.5)
+    expect(b4?.consumption.monthly[0]?.amount).toBe(14.5)
   })
 
   it('keeps the last good snapshot when the official API fails', async () => {

@@ -2,7 +2,7 @@
  * Composer capsule showing the official DeepSeek API account balance.
  */
 
-import React, { type ReactNode, useRef, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'

@@ -180,6 +180,7 @@ export function computeConsumption(records: BalanceRecord[]): ConsumptionData {
   for (let i = 1; i < records.length; i++) {
     const prev = records[i - 1]
     const curr = records[i]
+    if (!prev || !curr) continue
 
     if (prev.currency === curr.currency && prev.total > curr.total) {
       const delta = prev.total - curr.total
