@@ -31,7 +31,24 @@ function credentials(value?: string) {
 }
 
 describe('getPeakValleyStatus', () => {
-  it('returns peak status during daytime peak hours (10:00 UTC+8)', () => {
+  it('returns valley status all day on weekends (Saturday & Sunday)', () => {
+    // 2026-08-22 is Saturday
+    const satMorning = new Date('2026-08-22T10:00:00+08:00')
+    expect(getPeakValleyStatus(satMorning)).toEqual({
+      period: 'valley',
+      periodLabel: '梁文谷',
+    })
+
+    // 2026-08-23 is Sunday
+    const sunAfternoon = new Date('2026-08-23T15:00:00+08:00')
+    expect(getPeakValleyStatus(sunAfternoon)).toEqual({
+      period: 'valley',
+      periodLabel: '梁文谷',
+    })
+  })
+
+  it('returns peak status during weekday morning peak (09:00-12:00 UTC+8)', () => {
+    // 2026-08-24 is Monday
     const date = new Date('2026-08-24T10:00:00+08:00')
     expect(getPeakValleyStatus(date)).toEqual({
       period: 'peak',
@@ -39,43 +56,61 @@ describe('getPeakValleyStatus', () => {
     })
   })
 
-  it('returns valley status during overnight valley hours (03:00 UTC+8)', () => {
-    const date = new Date('2026-08-24T03:00:00+08:00')
+  it('returns valley status during weekday lunch break (12:00-14:00 UTC+8)', () => {
+    const date = new Date('2026-08-24T13:00:00+08:00')
     expect(getPeakValleyStatus(date)).toEqual({
       period: 'valley',
       periodLabel: '梁文谷',
     })
   })
 
-  it('handles exact boundary at 00:30:00 UTC+8 (start of valley)', () => {
-    const date = new Date('2026-08-24T00:30:00+08:00')
-    expect(getPeakValleyStatus(date)).toEqual({
-      period: 'valley',
-      periodLabel: '梁文谷',
-    })
-  })
-
-  it('handles boundary just before valley at 00:29:59 UTC+8 (peak)', () => {
-    const date = new Date('2026-08-24T00:29:59+08:00')
+  it('returns peak status during weekday afternoon peak (14:00-18:00 UTC+8)', () => {
+    const date = new Date('2026-08-24T15:30:00+08:00')
     expect(getPeakValleyStatus(date)).toEqual({
       period: 'peak',
       periodLabel: '梁文峰',
     })
   })
 
-  it('handles boundary just before peak at 08:29:59 UTC+8 (valley)', () => {
-    const date = new Date('2026-08-24T08:29:59+08:00')
-    expect(getPeakValleyStatus(date)).toEqual({
+  it('returns valley status during weekday night and early morning', () => {
+    const earlyMorning = new Date('2026-08-24T03:00:00+08:00')
+    expect(getPeakValleyStatus(earlyMorning)).toEqual({
+      period: 'valley',
+      periodLabel: '梁文谷',
+    })
+
+    const night = new Date('2026-08-24T20:00:00+08:00')
+    expect(getPeakValleyStatus(night)).toEqual({
       period: 'valley',
       periodLabel: '梁文谷',
     })
   })
 
-  it('handles exact boundary at 08:30:00 UTC+8 (start of peak)', () => {
-    const date = new Date('2026-08-24T08:30:00+08:00')
-    expect(getPeakValleyStatus(date)).toEqual({
+  it('handles weekday peak boundary times correctly', () => {
+    // 09:00:00 (start of morning peak)
+    expect(getPeakValleyStatus(new Date('2026-08-24T09:00:00+08:00'))).toEqual({
       period: 'peak',
       periodLabel: '梁文峰',
+    })
+    // 08:59:59 (just before morning peak)
+    expect(getPeakValleyStatus(new Date('2026-08-24T08:59:59+08:00'))).toEqual({
+      period: 'valley',
+      periodLabel: '梁文谷',
+    })
+    // 12:00:00 (end of morning peak -> valley)
+    expect(getPeakValleyStatus(new Date('2026-08-24T12:00:00+08:00'))).toEqual({
+      period: 'valley',
+      periodLabel: '梁文谷',
+    })
+    // 14:00:00 (start of afternoon peak)
+    expect(getPeakValleyStatus(new Date('2026-08-24T14:00:00+08:00'))).toEqual({
+      period: 'peak',
+      periodLabel: '梁文峰',
+    })
+    // 18:00:00 (end of afternoon peak -> valley)
+    expect(getPeakValleyStatus(new Date('2026-08-24T18:00:00+08:00'))).toEqual({
+      period: 'valley',
+      periodLabel: '梁文谷',
     })
   })
 

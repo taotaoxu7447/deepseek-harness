@@ -76,30 +76,43 @@ function pickBalanceInfo(infos: OfficialBalanceInfo[]): OfficialBalanceInfo | un
 
 /**
  * Determine pricing period based on Beijing time (UTC+8).
- * Valley: 00:30:00 <= time < 08:30:00 -> { period: 'valley', periodLabel: '梁文谷' }
- * Peak: otherwise -> { period: 'peak', periodLabel: '梁文峰' }
+ * Weekends (Saturday & Sunday): All day is Valley -> { period: 'valley', periodLabel: '梁文谷' }
+ * Weekdays (Monday to Friday):
+ *   Peak hours: 09:00:00 <= time < 12:00:00 or 14:00:00 <= time < 18:00:00 -> { period: 'peak', periodLabel: '梁文峰' }
+ *   Valley hours: other weekday times (00:00-09:00, 12:00-14:00, 18:00-24:00) -> { period: 'valley', periodLabel: '梁文谷' }
  */
 export function getPeakValleyStatus(date: Date = new Date()): { period: BalancePeriod; periodLabel: string } {
   const utcMilliseconds = date.getTime()
   const beijingTime = new Date(utcMilliseconds + 8 * 60 * 60 * 1000)
-  const hours = beijingTime.getUTCHours()
-  const minutes = beijingTime.getUTCMinutes()
-  const seconds = beijingTime.getUTCSeconds()
+  const dayOfWeek = beijingTime.getUTCDay() // 0 = Sunday, 6 = Saturday
 
-  const totalSeconds = hours * 3600 + minutes * 60 + seconds
-  const valleyStartSeconds = 30 * 60 // 00:30:00 = 1800
-  const valleyEndSeconds = 8 * 3600 + 30 * 60 // 08:30:00 = 30600
-
-  if (totalSeconds >= valleyStartSeconds && totalSeconds < valleyEndSeconds) {
+  // Weekends are full-day Valley (谷时 / 梁文谷)
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
     return {
       period: 'valley',
       periodLabel: '梁文谷',
     }
   }
 
+  // Weekdays: 09:00-12:00 (32400-43200s) and 14:00-18:00 (50400-64800s) are Peak (峰时 / 梁文峰)
+  const hours = beijingTime.getUTCHours()
+  const minutes = beijingTime.getUTCMinutes()
+  const seconds = beijingTime.getUTCSeconds()
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds
+
+  const isMorningPeak = totalSeconds >= 9 * 3600 && totalSeconds < 12 * 3600
+  const isAfternoonPeak = totalSeconds >= 14 * 3600 && totalSeconds < 18 * 3600
+
+  if (isMorningPeak || isAfternoonPeak) {
+    return {
+      period: 'peak',
+      periodLabel: '梁文峰',
+    }
+  }
+
   return {
-    period: 'peak',
-    periodLabel: '梁文峰',
+    period: 'valley',
+    periodLabel: '梁文谷',
   }
 }
 
