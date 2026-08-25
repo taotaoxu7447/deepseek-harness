@@ -3,13 +3,12 @@
  * and hero's top-left brand tag text and stroke color.
  */
 
-import { useSyncExternalStore, type ChangeEvent } from 'react'
+import { useState, useSyncExternalStore, type ChangeEvent } from 'react'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { BrandWordmark } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { BrandTagSettings } from './Brand.tsx'
 import css from './BrandTagRow.module.css'
-
 /** Shipped color chip presets for the brand tag badge. */
 export const COLOR_PRESETS = [
   '#00e5ff',
@@ -63,30 +62,38 @@ export function BrandTagRow({
   const hookSnapshot = useBrandTagSettings?.(s => s.value)
   const settings = useBrandTagSettings !== undefined ? hookSnapshot : fallbackSnapshot
 
-  const currentText = settings?.text ?? ''
-  const currentStroke = settings?.strokeColor ?? DEFAULT_BRAND_TAG_SETTINGS.strokeColor
+  const [localText, setLocalText] = useState<string | null>(null)
+  const [localStroke, setLocalStroke] = useState<string | null>(null)
+
+  const currentText = localText !== null ? localText : (settings?.text ?? DEFAULT_BRAND_TAG_SETTINGS.text)
+  const currentStroke = localStroke !== null ? localStroke : (settings?.strokeColor ?? DEFAULT_BRAND_TAG_SETTINGS.strokeColor)
 
   const handleTextChange = (e: ChangeEvent<HTMLInputElement>) => {
     const nextText = e.target.value.slice(0, 8)
+    setLocalText(nextText)
     void scope?.set('text', nextText)
   }
 
   const handleColorPreset = (color: string) => {
+    setLocalStroke(color)
     void scope?.set('strokeColor', color)
   }
 
   const handleHexChange = (e: ChangeEvent<HTMLInputElement>) => {
-    void scope?.set('strokeColor', e.target.value)
+    const val = e.target.value
+    setLocalStroke(val)
+    void scope?.set('strokeColor', val)
   }
 
   const handleReset = () => {
+    setLocalText(DEFAULT_BRAND_TAG_SETTINGS.text)
+    setLocalStroke(DEFAULT_BRAND_TAG_SETTINGS.strokeColor)
     if (!scope) return
     void scope.set('text', DEFAULT_BRAND_TAG_SETTINGS.text)
     void scope.set('strokeColor', DEFAULT_BRAND_TAG_SETTINGS.strokeColor)
     void scope.set('fillColorLight', DEFAULT_BRAND_TAG_SETTINGS.fillColorLight)
     void scope.set('fillColorDark', DEFAULT_BRAND_TAG_SETTINGS.fillColorDark)
   }
-
   return (
     <div className={css.row}>
       <div className={css.rowText}>
@@ -95,8 +102,8 @@ export function BrandTagRow({
         <div className={css.preview}>
           <BrandWordmark
             includeMark={false}
-            tagText={settings?.text}
-            tagStroke={settings?.strokeColor}
+            tagText={currentText}
+            tagStroke={currentStroke}
             tagFillLight={settings?.fillColorLight}
             tagFillDark={settings?.fillColorDark}
           />
@@ -135,7 +142,7 @@ export function BrandTagRow({
           <input
             type="text"
             className={css.hexInput}
-            value={settings?.strokeColor ?? ''}
+            value={currentStroke}
             placeholder="#00e5ff"
             maxLength={7}
             onChange={handleHexChange}

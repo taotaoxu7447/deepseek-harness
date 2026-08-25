@@ -42,8 +42,6 @@ export function BrandWordmark({
   const text = (tagText?.trim() || 'TAO').slice(0, 8)
   const W = Math.max(28, 16 + text.length * 7.0)
   const stroke = tagStroke ?? '#00e5ff'
-  const lightFill = tagFillLight ?? 'var(--dsh-brand-tag-bg-light, #ffffff)'
-  const darkFill = tagFillDark ?? 'var(--dsh-brand-tag-bg-dark, #0f172a)'
   const textX = 49.5 + W / 2 - 2.25
 
   const baseWidth = 128 + 49.5 + W + 6
@@ -62,15 +60,16 @@ export function BrandWordmark({
       <defs>
         <style>{`
           .dsh-brand-tag-plate {
-            fill: var(--dsh-brand-tag-fill, ${lightFill});
+            fill: ${tagFillLight ?? '#ffffff'};
           }
-          [data-theme="light"] .dsh-brand-tag-plate {
-            fill: var(--dsh-brand-tag-fill, ${lightFill});
-          }
+          :root[data-theme="dark"] .dsh-brand-tag-plate,
+          :root[data-ds-dark-theme] .dsh-brand-tag-plate,
+          html[data-theme="dark"] .dsh-brand-tag-plate,
+          body[data-theme="dark"] .dsh-brand-tag-plate,
+          body[data-ds-dark-theme] .dsh-brand-tag-plate,
           [data-theme="dark"] .dsh-brand-tag-plate,
-          [data-ds-dark-theme] .dsh-brand-tag-plate,
-          body[data-ds-dark-theme] .dsh-brand-tag-plate {
-            fill: var(--dsh-brand-tag-fill, ${darkFill});
+          [data-ds-dark-theme] .dsh-brand-tag-plate {
+            fill: ${tagFillDark ?? '#0f172a'} !important;
           }
         `}</style>
         {includeMark && (
@@ -99,7 +98,6 @@ export function BrandWordmark({
         <polygon
           className="dsh-brand-tag-plate"
           points={`49.5,0 ${49.5 + W},0 ${49.5 + W - 4.5},14 45,14`}
-          fill="var(--dsh-brand-tag-fill, var(--dsw-alias-surface-raised, #0f172a))"
           stroke={stroke}
           strokeWidth="1"
         />

@@ -1799,6 +1799,10 @@ importers:
         version: 18.3.1(react@18.3.1)
 
   packages/client/ui-brand-official:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -1818,6 +1822,9 @@ importers:
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../settings/settings
       '@testing-library/react':
         specifier: ^16.1.0
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
