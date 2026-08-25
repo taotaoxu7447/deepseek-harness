@@ -4,9 +4,27 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { BRAND_TAG_NS, type BrandTagSettings, OfficialBrandMark, OfficialBrandName } from './Brand.tsx'
+import {
+  BrandTagRow,
+  COLOR_PRESETS,
+  DEFAULT_BRAND_TAG_SETTINGS,
+} from './BrandTagRow.tsx'
+import { NS, en, zh } from './locales.ts'
 
-export { BRAND_TAG_NS, OfficialBrandMark, OfficialBrandName }
+export {
+  BRAND_TAG_NS,
+  BrandTagRow,
+  COLOR_PRESETS,
+  DEFAULT_BRAND_TAG_SETTINGS,
+  OfficialBrandMark,
+  OfficialBrandName,
+  NS,
+  en,
+  zh,
+}
 export type { BrandTagSettings, OfficialBrandNameProps } from './Brand.tsx'
+export type { BrandTagRowInjected, BrandTagRowProps } from './BrandTagRow.tsx'
+export type { BrandLocaleKey } from './locales.ts'
 
 /** Required services: the UI slot registry and settings scope. */
 export const inject = ['slots', 'settingsScope']
@@ -18,6 +36,13 @@ export const inject = ['slots', 'settingsScope']
 export function apply(ctx: ClientContext): void {
   if (process.env.DSH_CLIENT_BUILD_PROFILE !== 'official') return
   const brandTagScope = ctx.settingsScope.bind<BrandTagSettings>({ namespace: BRAND_TAG_NS })
+
+  ctx.effect(() => {
+    const locale = ctx.get('locale')
+    if (locale) {
+      return locale.register(NS, { zh, en })
+    }
+  }, 'ui-brand-official: dictionaries')
 
   ctx.slots.inject('sidebar.brand.mark', () =>
     ctx.slots.inject('sidebar.brand.name', () =>
@@ -31,4 +56,15 @@ export function apply(ctx: ClientContext): void {
         }, OfficialBrandName)
         yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, OfficialBrandMark)
       })))
+
+  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+    name: 'settings.general.item',
+    id: 'brand-tag',
+    order: 15,
+    locale: NS,
+    inject: () => ({
+      hooks: { brandTagSettings: brandTagScope },
+      scope: brandTagScope,
+    }),
+  }, BrandTagRow))
 }
