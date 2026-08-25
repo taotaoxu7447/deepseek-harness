@@ -68,14 +68,69 @@ describe('FishLogo', () => {
 })
 
 describe('BrandWordmark', () => {
-  it('can render the name artwork with or without its leading mark', () => {
+  it('can render the name artwork with or without its leading mark and renders default TAO tag', () => {
     const view = render(<primitives.BrandWordmark />)
     const svg = view.container.querySelector('svg')!
-    expect(svg.getAttribute('width')).toBe('216')
-    expect(svg.getAttribute('viewBox')).toBe('0 0 216 24')
+    expect(svg.getAttribute('width')).toBe('220.5')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 220.5 24')
+
+    const texts = view.container.querySelectorAll('text')
+    const tagText = Array.from(texts).find(el => el.textContent === 'TAO')
+    expect(tagText).not.toBeNull()
+    expect(tagText?.getAttribute('fill')).toBe('#00e5ff')
+    expect(tagText?.getAttribute('x')).toBe('65.75')
+
+    const tagPolygon = view.container.querySelector('polygon.dsh-brand-tag-plate')
+    expect(tagPolygon).not.toBeNull()
+    expect(tagPolygon?.getAttribute('points')).toBe('49.5,0 86.5,0 82,14 45,14')
+    expect(tagPolygon?.getAttribute('stroke')).toBe('#00e5ff')
 
     view.rerender(<primitives.BrandWordmark includeMark={false} />)
-    expect(svg.getAttribute('width')).toBe('190')
-    expect(svg.getAttribute('viewBox')).toBe('26 0 190 24')
+    expect(svg.getAttribute('width')).toBe('194.5')
+    expect(svg.getAttribute('viewBox')).toBe('26 0 194.5 24')
+  })
+
+  it('renders custom tagText="TEST" with calculated width and polygon', () => {
+    const { container } = render(<primitives.BrandWordmark tagText="TEST" />)
+    const svg = container.querySelector('svg')!
+    expect(svg.getAttribute('width')).toBe('227.5')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 227.5 24')
+
+    const tagText = Array.from(container.querySelectorAll('text')).find(el => el.textContent === 'TEST')
+    expect(tagText).not.toBeNull()
+    expect(tagText?.getAttribute('x')).toBe('69.25')
+
+    const tagPolygon = container.querySelector('polygon.dsh-brand-tag-plate')
+    expect(tagPolygon?.getAttribute('points')).toBe('49.5,0 93.5,0 89,14 45,14')
+  })
+
+  it('truncates custom tagText longer than 8 characters', () => {
+    const { container } = render(<primitives.BrandWordmark tagText="LONGERTHAN8CHARS" />)
+    const svg = container.querySelector('svg')!
+    expect(svg.getAttribute('width')).toBe('255.5')
+    expect(svg.getAttribute('viewBox')).toBe('0 0 255.5 24')
+
+    const tagText = Array.from(container.querySelectorAll('text')).find(el => el.textContent === 'LONGERTH')
+    expect(tagText).not.toBeNull()
+    expect(tagText?.getAttribute('x')).toBe('83.25')
+
+    const tagPolygon = container.querySelector('polygon.dsh-brand-tag-plate')
+    expect(tagPolygon?.getAttribute('points')).toBe('49.5,0 121.5,0 117,14 45,14')
+  })
+
+  it('sets custom tagStroke for border stroke and text color', () => {
+    const { container } = render(<primitives.BrandWordmark tagStroke="#ef4444" />)
+    const tagPolygon = container.querySelector('polygon.dsh-brand-tag-plate')
+    expect(tagPolygon?.getAttribute('stroke')).toBe('#ef4444')
+
+    const tagText = Array.from(container.querySelectorAll('text')).find(el => el.textContent === 'TAO')
+    expect(tagText?.getAttribute('fill')).toBe('#ef4444')
+  })
+
+  it('supports custom tagFillLight and tagFillDark props in style defs', () => {
+    const { container } = render(<primitives.BrandWordmark tagFillLight="#ffffff" tagFillDark="#0f172a" />)
+    const styleEl = container.querySelector('defs style')
+    expect(styleEl?.textContent).toContain('#ffffff')
+    expect(styleEl?.textContent).toContain('#0f172a')
   })
 })
