@@ -23,14 +23,14 @@ afterEach(() => {
 })
 
 function mountRow(stub: StubSettingsScope<BrandTagSettings>, useHook = true) {
-  const props: BrandTagRowProps = {
+  const props = {
     scope: stub.scope,
     useBrandTagSettings: useHook ? bindSnapshotSelector(stub.scope) : undefined,
     t: (key: string) => {
       const translation = zh[key as keyof typeof zh]
       return translation ?? key
     },
-  }
+  } as unknown as BrandTagRowProps
   const view = render(<BrandTagRow {...props} />)
   return { ...view, stub }
 }
