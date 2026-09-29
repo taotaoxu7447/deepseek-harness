@@ -349,6 +349,7 @@ describe('session.history projections block', () => {
       validateImage(): Promise<void> { return Promise.resolve() }
       saveImage(): Promise<never> { return Promise.reject(new Error('unused')) }
       readImage(): Promise<never> { return Promise.reject(new Error('unused')) }
+      readImageById(): Promise<never> { return Promise.reject(new Error('unused')) }
     })
     const gateway = remote(ctx)
     await new Promise(resolve => setTimeout(resolve, 0))
@@ -566,6 +567,9 @@ describe('session.list projections column', () => {
         'test/last-user': { text: 'cached' },
         sessionListMetadata: { blank: false, lastPromptAt: 6 },
         title: 'Cached title',
+      },
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused'))
       },
     })
   })

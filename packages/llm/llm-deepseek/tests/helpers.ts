@@ -84,6 +84,9 @@ export function requestImageStore(readImageRequest: AttachmentStore['readImageRe
     saveImage(): never { throw new Error('unexpected image save') }
     readImage(): never { throw new Error('unexpected original image read') }
     override readImageRequest = readImageRequest
+    readImageById(): Promise<never> {
+      return Promise.reject(new Error('readImageById unused'))
+    }
   }
   return new ProjectedAttachments(new Context())
 }

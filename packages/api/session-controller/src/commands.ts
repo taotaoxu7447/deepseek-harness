@@ -17,6 +17,33 @@ import {
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+/**
+ * Replace one admitted image part with the pointer a text-only route can
+ * carry: the image is already durably stored, so the pointer names its
+ * attachment id and the `view_image` argument that fetches it. The model
+ * decides when (and with which focus question) to look, through the same
+ * priority chain as every other view.
+ * @param part - the validated, durably stored image part.
+ * @returns the pointer text part.
+ */
+function visionPointerBlock(part: {
+  type: 'image'
+  attachment: {
+    attachmentId: { toString(): string }
+    mediaType: string
+    width: number
+    height: number
+    name?: string
+  }
+}): { type: 'text'; text: string } {
+  const ref = part.attachment
+  const label = ref.name ?? 'image'
+  return {
+    type: 'text',
+    text: `[uploaded image: ${label} (${ref.width}x${ref.height}, ${ref.mediaType}); view it with view_image, passing attachment_id="${String(ref.attachmentId)}" verbatim]`,
+  }
+}
+
 import type { SessionEvent, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
@@ -336,22 +363,35 @@ export class SessionCommandController {
     const hasImage = request.content.some(part => part.type === 'image')
     const admit = async (): Promise<SessionPromptValue> => {
       try {
+        let bridged = false
         if (hasImage) {
           const current = this.agents.selectionFor(agent).current
           const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)
           if (model.inputModalities !== undefined && !model.inputModalities.includes('image')) {
-            throw new RemoteError(
-              'session/attachment-invalid',
-              `Model "${current.model}" does not support image input.`,
-              { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
-            )
+            // A text-only route: an image block in the log would poison every
+            // later request, so it may only enter as a pointer the model
+            // resolves through view_image. Without a usable vision chain the
+            // pointer would name a tool that cannot run, so the image is
+            // refused up front instead.
+            const vision = this.ctx.get('vision')
+            if (vision === undefined || !vision.hasUsableProvider()) {
+              throw new RemoteError(
+                'session/attachment-invalid',
+                `Model "${current.model}" does not support image input.`,
+                { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+              )
+            }
+            bridged = true
           }
         }
         const admission = resolvePromptFileReceipts(
           request.content,
           receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
         )
-        const content = await this.ctx.attachments.admitPromptContent(admission.content)
+        const admitted = await this.ctx.attachments.admitPromptContent(admission.content)
+        const content = bridged
+          ? admitted.map(part => part.type === 'image' ? visionPointerBlock(part) : part)
+          : admitted
         const message: UserMessage = createUserMessage({ content, source })
         if (this.ctx.agents.get(agent.id) !== agent) {
           throw new RemoteError(

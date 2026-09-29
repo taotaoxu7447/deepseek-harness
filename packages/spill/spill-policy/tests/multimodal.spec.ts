@@ -47,6 +47,10 @@ class TestAttachments extends AttachmentStore {
   async readImage(ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
     return { ref, data: await readFile(this.imageHostPath(ref)) }
   }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused'))
+  }
 }
 
 class VisionAdapter extends LlmAdapter {

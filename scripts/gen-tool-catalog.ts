@@ -100,6 +100,10 @@ class CatalogAttachmentStore extends AttachmentStore {
   override readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
     return Promise.reject(new Error('gen-tool-catalog: attachment reads are unreachable during schema harvest'))
   }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused'))
+  }
 }
 
 const root = resolve(import.meta.dirname, '..')

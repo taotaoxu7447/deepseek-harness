@@ -54,6 +54,10 @@ class RecordingStore extends AttachmentStore {
     throw new Error('not used')
   }
 
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused in this test'))
+  }
+
   override readImageRequest(
     ref: ImageAttachmentRef,
     _target: ImageRequestTarget,
@@ -87,6 +91,10 @@ class UnsupportedProjectionStore extends AttachmentStore {
 
   readImage(): Promise<StoredImageAttachment> {
     throw new Error('not used')
+  }
+
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused in this test'))
   }
 }
 

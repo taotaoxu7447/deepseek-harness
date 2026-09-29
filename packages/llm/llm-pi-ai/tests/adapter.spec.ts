@@ -293,6 +293,10 @@ describe('PiAiAdapter provider routing', () => {
         return readImage(value)
       }
 
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused'))
+      }
+
       override imageHostPath(_ref: ImageAttachmentRef): string {
         return HOST_IMAGE_PATH
       }

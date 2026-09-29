@@ -410,6 +410,10 @@ describe('extension-less paths', () => {
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
+      }
     }
     await writeFile(join(dir, 'avatar'), PNG_1X1)
     const ctx = await setup({ attachments: false })
@@ -441,6 +445,10 @@ describe('extension-less paths', () => {
 
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
+      }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
       }
     }
     await writeFile(join(dir, 'sniffed'), PNG_1X1)
@@ -552,6 +560,10 @@ describe('argument and service preconditions', () => {
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
+      }
     }
     const ctx = await setup({ attachments: false })
     await ctx.plugin(JpegOnlyStore)
@@ -629,6 +641,10 @@ describe('image admission failures', () => {
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
+      }
     }
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ attachments: false })
@@ -697,6 +713,10 @@ describe('image admission failures', () => {
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
       }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
+      }
     }
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ attachments: false })
@@ -736,6 +756,10 @@ describe('image admission failures', () => {
 
       readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
         throw new Error('unreachable in this test')
+      }
+
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused in this test'))
       }
     }
     await writeFile(join(dir, 'red.png'), PNG_1X1)

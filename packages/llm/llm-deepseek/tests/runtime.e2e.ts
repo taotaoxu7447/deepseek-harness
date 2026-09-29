@@ -91,6 +91,10 @@ class E2eAttachmentStore extends AttachmentStore {
     return Promise.resolve({ ref, data: TEST_PNG })
   }
 
+  readImageById(): Promise<never> {
+    return Promise.reject(new Error('readImageById unused'))
+  }
+
   override readImageRequest(
     _ref: ImageAttachmentRef,
     _target: ImageRequestTarget,

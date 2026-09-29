@@ -91,6 +91,10 @@ async function harness(image?: StoredImageAttachment): Promise<Context> {
         return Promise.resolve(fixture)
       }
 
+      readImageById(): Promise<never> {
+        return Promise.reject(new Error('readImageById unused'))
+      }
+
       override readImageRequest(ref: ImageAttachmentRef, _target: ImageRequestTarget): Promise<RequestImageAttachment> {
         if (ref.attachmentId !== fixture.ref.attachmentId) {
           return Promise.reject(new Error('unknown e2e attachment fixture'))
