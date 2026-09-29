@@ -1,14 +1,11 @@
 // @vitest-environment jsdom
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
-import { bindSnapshotSelector, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { cleanup, render } from '@testing-library/react'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { apply, inject } from '../src/client/index.ts'
-import {
-  type BrandNameInjected, type BrandTagSettings,
-  OfficialBrandMark, OfficialBrandName,
-} from '../src/client/Brand.tsx'
+import { OfficialBrandMark, OfficialBrandName } from '../src/client/Brand.tsx'
+import { apply as hostApply } from '../src/index.ts'
 
 afterEach(() => {
   cleanup()
@@ -18,26 +15,29 @@ afterEach(() => {
 const HOLES = [
   'sidebar.brand.mark',
   'sidebar.brand.name',
-  'conversation.hero.brand.mark',
 ] as const
+
+const HERO_HOLE = 'conversation.hero.brand.mark'
 
 async function bench(declare = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
-  const stub = stubSettingsScope<BrandTagSettings>()
-  ctx.provide('settingsScope', { bind: () => stub.scope } as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declareHoles = () => slots.register({
     name: 'root',
-    children: Object.fromEntries(HOLES.map(name => [name, { kind: 'single', scope: 'root' }])),
+    children: Object.fromEntries([...HOLES, HERO_HOLE].map(name => [name, { kind: 'single', scope: 'root' }])),
   } as never, () => null)
   const disposeHoles = declare ? declareHoles() : undefined
-  return { ctx, slots, stub, declareHoles, disposeHoles }
+  return { ctx, slots, declareHoles, disposeHoles }
 }
 
 describe('official browser-brand plugin', () => {
-  it('declares the slot and settingsScope services it uses', () => {
-    expect(inject).toEqual(['slots', 'settingsScope'])
+  it('keeps the host Loader entry inert', () => {
+    expect(hostApply).not.toThrow()
+  })
+
+  it('declares only the slot service it uses', () => {
+    expect(inject).toEqual(['slots'])
   })
 
   it('leaves every slot empty outside the official build profile', async () => {
@@ -71,61 +71,21 @@ describe('official browser-brand plugin', () => {
     for (const hole of HOLES) expect(after.slots.entries(hole)).toHaveLength(1)
   })
 
-  it('wires settingsScope into the sidebar.brand.name slot registration', async () => {
+  it('leaves the conversation hero on its declaring fallback even in official builds', async () => {
     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
     const subject = await bench()
-    const fiber = subject.ctx.plugin({ inject: [...inject], apply })
-    await fiber.await()
-
-    const entry = subject.slots.entries('sidebar.brand.name')[0]!
-    expect(entry.component).toBe(OfficialBrandName)
-    const injected = (entry.inject as unknown as () => BrandNameInjected)()
-    expect(injected.hooks.brandTagSettings).toBe(subject.stub.scope)
+    await subject.ctx.plugin({ inject: [...inject], apply }).await()
+    expect(subject.slots.entries(HERO_HOLE)).toHaveLength(0)
   })
 
   it('renders the official name independently from both requested mark sizes', () => {
     const name = render(<OfficialBrandName />)
-    expect(name.container.querySelector('svg')?.getAttribute('viewBox')).toBe('26 0 194.5 24')
+    expect(name.container.querySelector('svg')?.getAttribute('viewBox')).toBe('26 0 156 24')
     name.unmount()
 
-    const mark = render(<OfficialBrandMark size={34} className="hero-mark" />)
+    const mark = render(<OfficialBrandMark size={34} />)
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('34')
-    expect(mark.container.querySelector('svg')?.getAttribute('class')).toBe('hero-mark')
     mark.rerender(<OfficialBrandMark size={24} />)
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('24')
-  })
-
-  it('renders default TAO tag when settings are unconfigured or loading', () => {
-    const name = render(<OfficialBrandName />)
-    expect(name.container.textContent).toContain('TAO')
-    expect(name.container.textContent).toContain('HARNESS')
-    const plate = name.container.querySelector('.dsh-brand-tag-plate')
-    expect(plate?.getAttribute('stroke')).toBe('#00e5ff')
-  })
-
-  it('re-renders with custom tag text and colors when brand-tag settings update', () => {
-    const stub = stubSettingsScope<BrandTagSettings>()
-    const useBrandTagSettings = bindSnapshotSelector(stub.scope)
-    const name = render(<OfficialBrandName useBrandTagSettings={useBrandTagSettings} />)
-
-    expect(name.container.textContent).toContain('TAO')
-
-    act(() => {
-      stub.publish({
-        status: 'ready',
-        value: {
-          text: 'CUSTOM',
-          strokeColor: '#ff007f',
-          fillColorLight: '#fefefe',
-          fillColorDark: '#1a1a1a',
-        },
-      })
-    })
-
-    expect(name.container.textContent).toContain('CUSTOM')
-    const plate = name.container.querySelector('.dsh-brand-tag-plate')
-    expect(plate?.getAttribute('stroke')).toBe('#ff007f')
-    expect(name.container.querySelector('style')?.textContent).toContain('#fefefe')
-    expect(name.container.querySelector('style')?.textContent).toContain('#1a1a1a')
   })
 })

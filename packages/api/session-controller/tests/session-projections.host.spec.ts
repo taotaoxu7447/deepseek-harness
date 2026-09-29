@@ -568,9 +568,6 @@ describe('session.list projections column', () => {
         sessionListMetadata: { blank: false, lastPromptAt: 6 },
         title: 'Cached title',
       },
-      readImageById(): Promise<never> {
-        return Promise.reject(new Error('readImageById unused'))
-      },
     })
   })
 

@@ -403,6 +403,8 @@
     { "path": "./packages/web/tool-web" },
     { "path": "./packages/vision/vision" },
     { "path": "./packages/vision/vision-qwen" },
+    { "path": "./packages/remote/deepseek-balance" },
+    { "path": "./packages/remote/v4-monitor" },
     { "path": "./packages/vision/tool-vision" },
     { "path": "./packages/spill/spill" },
     { "path": "./packages/spill/spill-local" },

@@ -66,6 +66,18 @@
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
+    # Fork feature: official DeepSeek API balance service. Polls /user/balance
+    # on demand, keeps a local history, and exposes ctx.deepseekBalance; its
+    # volatile entry is the Settings form (key reference, endpoint, toggle).
+    - id: deepseek-balance
+      name: '@deepseek-ai/dsh-deepseek-balance'
+
+    # Fork feature: DeepSeek V4 Flash live cluster monitor. Probes the ds-dash
+    # endpoint on demand and exposes ctx.v4Monitor; monitor URL, invite
+    # passcode, and poll interval live in its Settings form.
+    - id: v4-monitor
+      name: '@deepseek-ai/dsh-v4-monitor'
+
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
       config:
