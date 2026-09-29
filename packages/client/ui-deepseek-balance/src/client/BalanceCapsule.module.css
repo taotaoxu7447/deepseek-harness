@@ -1,0 +1,74 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 28px interactive pill with dynamic peak/valley color coding. */
+.chip {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 24px;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  color: var(--dsw-alias-label-secondary);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  outline: none;
+  font-family: inherit;
+  vertical-align: middle;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+
+.peak {
+  border-color: rgba(239, 68, 68, 0.35);
+  background-color: rgba(239, 68, 68, 0.08);
+  color: var(--dsw-alias-state-error-primary, #ef4444);
+}
+
+.peak:hover {
+  background-color: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.valley {
+  border-color: rgba(59, 130, 246, 0.35);
+  background-color: rgba(59, 130, 246, 0.08);
+  color: var(--dsw-static-blue-500, #3b82f6);
+}
+
+.valley:hover {
+  background-color: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.period {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  margin-right: 4px;
+  line-height: 1;
+}
+
+.amount {
+  display: inline-flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
