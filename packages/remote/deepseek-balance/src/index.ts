@@ -6,15 +6,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { Volatile } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import z from '@deepseek-ai/schemastery'
 import type {
   BalanceHistoryStore,
   BalancePeriod,
   BalanceRecord,
+  BalanceSnapshot,
   ConsumptionData,
   ConsumptionItem,
   DeepSeekBalance,
@@ -261,16 +264,46 @@ export function computeConsumption(records: BalanceRecord[]): ConsumptionData {
 }
 
 /**
- * Service that resolves the official DeepSeek key and fetches GET /user/balance.
+ * Service that resolves the official DeepSeek key and fetches GET /user/balance,
+ * serving browser surfaces over the generated `deepseekBalance` Remote namespace.
  */
-export class DeepSeekBalanceService extends Service {
+export class DeepSeekBalanceService extends TypertRemoteService {
   static Config = Config
 
   private lastBalance: DeepSeekBalance | null = null
   private lastFetchedAt = 0
 
   constructor(ctx: Context, private readonly entry: Config) {
-    super(ctx, 'deepseekBalance')
+    super(ctx, 'deepseekBalance', { namespace: 'deepseekBalance' })
+  }
+
+  /**
+   * One browser-facing read: the toggle state plus the freshest balance the
+   * short TTL cache allows. The key never rides the response.
+   * @param force - whether to bypass the short TTL cache.
+   * @returns the current snapshot.
+   */
+  @Remote
+  async read(force?: boolean): Promise<BalanceSnapshot> {
+    const enabled = this.config.enabled
+    return {
+      enabled,
+      balance: enabled ? await this.fetchBalance(force === true) : null,
+    }
+  }
+
+  /**
+   * Turn the composer capsule on or off by writing this entry's stored user
+   * section, so the volatile config the Settings form renders stays the one
+   * authority.
+   * @param enabled - the next toggle state.
+   */
+  @Remote
+  async setEnabled(enabled: boolean): Promise<void> {
+    const ns = this.ctx.fiber.entry?.options.id
+    const settings = this.ctx.get('settings')
+    if (ns === undefined || settings === undefined) return
+    await settings.update(ns, { enabled })
   }
 
   /** Snapshot of the currently authoritative configuration. */

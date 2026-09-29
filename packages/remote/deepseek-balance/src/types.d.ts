@@ -1,8 +1,6 @@
 /** Official DeepSeek API account balance snapshot. */
-
 /** Pricing period classification based on Beijing time (UTC+8). */
 export type BalancePeriod = 'peak' | 'valley'
-
 /** Single data point in daily or monthly consumption aggregation. */
 export interface ConsumptionItem {
   /** Date key: 'YYYY-MM-DD' for daily or 'YYYY-MM' for monthly. */
@@ -12,7 +10,6 @@ export interface ConsumptionItem {
   /** Aggregated consumption amount. */
   amount: number
 }
-
 /** Aggregated consumption time-series data. */
 export interface ConsumptionData {
   /** Daily consumption history (e.g. past 14/30 days). */
@@ -20,7 +17,6 @@ export interface ConsumptionData {
   /** Monthly consumption history (e.g. past 12 months). */
   monthly: ConsumptionItem[]
 }
-
 /** One currency row from GET /user/balance. */
 export interface DeepSeekBalance {
   /** ISO-ish currency code returned by the official API (`CNY` or `USD`). */
@@ -36,7 +32,6 @@ export interface DeepSeekBalance {
   /** Aggregated consumption data. */
   consumption: ConsumptionData
 }
-
 /** Balance record stored in history. */
 export interface BalanceRecord {
   /** Timestamp in milliseconds. */
@@ -46,12 +41,10 @@ export interface BalanceRecord {
   /** Currency code. */
   currency: string
 }
-
 /** Historical snapshots file schema. */
 export interface BalanceHistoryStore {
   records: BalanceRecord[]
 }
-
 /** One browser-facing snapshot served over the `deepseekBalance` Remote namespace. */
 export interface BalanceSnapshot {
   /** Whether the composer capsule is enabled; the sidebar toggle writes this. */
@@ -59,3 +52,4 @@ export interface BalanceSnapshot {
   /** Latest official-API balance, or null when no key is configured or no fetch succeeded yet. */
   balance: DeepSeekBalance | null
 }
+//# sourceMappingURL=types.d.ts.map

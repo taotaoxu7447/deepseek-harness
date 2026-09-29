@@ -35,4 +35,4 @@ None — monitoring requests query the ds-dash telemetry endpoint independently 
 
 - **Polling on-demand** — State is queried via HTTP polling rather than SSE push streams; polling occurs only while a consumer polls `fetchState` and both connection settings are present.
 - **Passcode security** — Invite codes are stored in the local settings document and passed as custom request headers.
-- **No 0.2.0 dock UI yet** — the composer status dock needs a port onto the current client-plugin surface; until then the service serves host-side consumers only.
+- **Dock UI** — the browser dock lives in `@deepseek-ai/dsh-client-ui-v4-monitor` (composer strip + sidebar toggle) over this service's `v4Monitor` Remote namespace.

@@ -1,15 +1,12 @@
 /** DeepSeek V4 Flash live cluster monitoring types. */
-
 /** Sampling and generation parameters for an active slot task. */
 export interface V4SlotParams {
   temp?: number
   top_p?: number
   max_tokens?: number
 }
-
 /** Operating state of a model slot. */
 export type V4SlotState = 'idle' | 'prefilling' | 'decoding'
-
 /** One slot's real-time state in the model server. */
 export interface V4Slot {
   /** Slot identifier (0, 1, ...). */
@@ -41,7 +38,6 @@ export interface V4Slot {
   /** Active request sampling parameters. */
   params?: V4SlotParams
 }
-
 /** One completed historical request entry. */
 export interface V4HistoryItem {
   /** Slot that executed the task. */
@@ -59,7 +55,6 @@ export interface V4HistoryItem {
   /** End timestamp (Unix seconds). */
   end_ts: number
 }
-
 /** Model engine status. */
 export interface V4Engine {
   /** Whether the underlying inference server is healthy. */
@@ -69,7 +64,6 @@ export interface V4Engine {
   /** Error description if engine is unhealthy. */
   error: string | null
 }
-
 /** Complete state snapshot returned by ds-dash GET /ds-dash/api/state. */
 export interface V4MonitorState {
   /** Metric collection timestamp (Unix seconds). */
@@ -85,7 +79,6 @@ export interface V4MonitorState {
   /** Whether data is stale (> 15s since collection). */
   stale: boolean
 }
-
 /** One browser-facing snapshot served over the `v4Monitor` Remote namespace. */
 export interface V4MonitorSnapshot {
   /** Whether the composer dock is enabled; the sidebar toggle writes this. */
@@ -99,3 +92,4 @@ export interface V4MonitorSnapshot {
   /** Latest cluster state, or null while unconfigured or before the first successful read. */
   state: V4MonitorState | null
 }
+//# sourceMappingURL=types.d.ts.map

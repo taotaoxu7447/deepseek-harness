@@ -3,10 +3,12 @@
  * @module @deepseek-ai/dsh-v4-monitor
  */
 
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { Volatile } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/cordis-plugin-loader'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from '@deepseek-ai/schemastery'
-import type { V4MonitorState } from './types.ts'
+import type { V4MonitorSnapshot, V4MonitorState } from './types.ts'
 
 export * from './types.ts'
 
@@ -54,16 +56,51 @@ export interface ResolvedConfig {
 }
 
 /**
- * Service managing DeepSeek V4 Flash live state fetches.
+ * Service managing DeepSeek V4 Flash live state fetches and serving browser
+ * surfaces over the generated `v4Monitor` Remote namespace. The invite
+ * passcode never rides a response.
  */
-export class V4MonitorService extends Service {
+export class V4MonitorService extends TypertRemoteService {
   static Config = Config
 
   private lastState: V4MonitorState | null = null
   private lastFetchedAt = 0
 
   constructor(ctx: Context, private readonly entry: Config) {
-    super(ctx, 'v4Monitor')
+    super(ctx, 'v4Monitor', { namespace: 'v4Monitor' })
+  }
+
+  /**
+   * One browser-facing read: toggle state, connection facts, and the freshest
+   * cluster state the one-second cache allows.
+   * @param force - whether to bypass cache and fetch immediately.
+   * @returns the current snapshot.
+   */
+  @Remote
+  async read(force?: boolean): Promise<V4MonitorSnapshot> {
+    const { enabled, monitorUrl, passcode, pollIntervalMs, autoCollapse } = this.config
+    const configured = monitorUrl.trim() !== '' && passcode.trim() !== ''
+    return {
+      enabled,
+      configured,
+      pollIntervalMs,
+      autoCollapse,
+      state: enabled && configured ? await this.fetchState(force === true) : null,
+    }
+  }
+
+  /**
+   * Turn the composer dock on or off by writing this entry's stored user
+   * section, so the volatile config the Settings form renders stays the one
+   * authority.
+   * @param enabled - the next toggle state.
+   */
+  @Remote
+  async setEnabled(enabled: boolean): Promise<void> {
+    const ns = this.ctx.fiber.entry?.options.id
+    const settings = this.ctx.get('settings')
+    if (ns === undefined || settings === undefined) return
+    await settings.update(ns, { enabled })
   }
 
   /** Snapshot of the currently authoritative configuration. */

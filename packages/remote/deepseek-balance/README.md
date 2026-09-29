@@ -32,4 +32,4 @@ None — balance requests query the official billing endpoint independently and 
 
 - **Key not shared with `llm-deepseek`** — 0.2.0 has no cross-entry settings read, so an installation whose conversation key is set as a literal in the `llm-deepseek` entry repeats it here (or switches that entry to `apiKeyEnv`).
 - **One currency** — When the official API returns both CNY and USD, the capsule shows CNY.
-- **No 0.2.0 capsule UI yet** — the browser capsule dock needs a port onto the current client-plugin surface; until then the service serves host-side consumers only.
+- **Capsule UI** — the browser capsule lives in `@deepseek-ai/dsh-client-ui-deepseek-balance` (composer chip + consumption popover + sidebar toggle) over this service's `deepseekBalance` Remote namespace.

@@ -32,4 +32,4 @@
 
 - **密钥不与 `llm-deepseek` 共享** — 0.2.0 没有跨条目设置读取，会话密钥若以字面量配置在 `llm-deepseek` 条目中，需要在这里重复一次（或把该条目改为 `apiKeyEnv`）。
 - **单一币种** — 官方 API 同时返回 CNY 与 USD 时，胶囊显示 CNY。
-- **暂无 0.2.0 胶囊 UI** — 浏览器端胶囊底座需要移植到当前的 client-plugin 表面；在此之前本服务只面向 Host 侧消费方。
+- **胶囊 UI** — 浏览器端胶囊在 `@deepseek-ai/dsh-client-ui-deepseek-balance`（输入栏芯片 + 消费弹层 + 侧栏开关），走本服务的 `deepseekBalance` Remote 命名空间。

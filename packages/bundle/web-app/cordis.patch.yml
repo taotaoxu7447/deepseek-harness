@@ -78,6 +78,7 @@
     - id: v4-monitor
       name: '@deepseek-ai/dsh-v4-monitor'
 
+
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
       config:
@@ -386,6 +387,16 @@
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal
       name: '@deepseek-ai/dsh-client-ui-goal'
+
+    # Fork feature: the official-API balance capsule right of the model
+    # picker plus its sidebar toggle, over the deepseekBalance namespace.
+    - id: ui-deepseek-balance
+      name: '@deepseek-ai/dsh-client-ui-deepseek-balance'
+
+    # Fork feature: the V4 cluster monitor dock above the composer plus its
+    # sidebar toggle, over the v4Monitor namespace.
+    - id: ui-v4-monitor
+      name: '@deepseek-ai/dsh-client-ui-v4-monitor'
 
     # The feedback surface: Like/Dislike in the assistant-message action
     # strip, the feedback dialog behind Dislike and /feedback with its

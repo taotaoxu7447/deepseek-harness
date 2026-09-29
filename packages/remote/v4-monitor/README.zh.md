@@ -35,4 +35,4 @@ DeepSeek V4 Flash 实时集群监控服务与 ds-dash 状态代理，以 `ctx.v4
 
 - **按需轮询** — 通过 HTTP 轮询而非 SSE；仅当消费方调用 `fetchState` 且两个连接参数都存在时轮询。
 - **邀请码** — 邀请码存在本地设置文档里，作为请求头发出。
-- **暂无 0.2.0 状态条 UI** — 输入框上方状态条需要移植到当前的 client-plugin 表面；在此之前本服务只面向 Host 侧消费方。
+- **状态条 UI** — 浏览器端状态条在 `@deepseek-ai/dsh-client-ui-v4-monitor`（输入栏状态条 + 侧栏开关），走本服务的 `v4Monitor` Remote 命名空间。
