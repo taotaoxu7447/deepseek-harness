@@ -587,6 +587,9 @@
 
 .footerActions {
   display: flex;
+  /* Multiple footer entries stack vertically in both sidebar widths; a row
+     would run wide-mode entries past the rail's edge. */
+  flex-direction: column;
 }
 
 .collapsed .footArea {
